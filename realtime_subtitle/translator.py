@@ -28,6 +28,7 @@ class TranslationRequest:
 
 class BaseTranslator:
     real_translation = False
+    disabled = False
 
     def translate(self, request: TranslationRequest) -> str:
         raise NotImplementedError
@@ -43,6 +44,16 @@ class MockTranslator(BaseTranslator):
         if request.source_language == request.target_language:
             return normalize_for_target_language(text, request.target_language, request.source_language)
         return normalize_for_target_language(f"[{request.target_language}] {text}", request.target_language, request.source_language)
+
+
+class DisabledTranslator(BaseTranslator):
+    disabled = True
+
+    def __init__(self, reason: str = "") -> None:
+        self.reason = reason
+
+    def translate(self, request: TranslationRequest) -> str:
+        return ""
 
 
 class OllamaTranslator(BaseTranslator):
@@ -195,15 +206,48 @@ def http_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeou
         raise RuntimeError(f"Translation API unavailable: {exc.reason}") from exc
 
 
+def http_get_json(url: str, timeout: float = 3.0) -> dict[str, Any]:
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw)
+    except urllib.error.HTTPError as exc:
+        message = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Ollama HTTP {exc.code}: {message}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Ollama unavailable: {exc.reason}") from exc
+
+
+def check_ollama_model(base_url: str, model: str) -> tuple[bool, str]:
+    try:
+        data = http_get_json(f"{base_url.rstrip('/')}/api/tags", timeout=3.0)
+    except Exception:
+        return False, "ollama_unavailable"
+    models = data.get("models", [])
+    names = {str(item.get("name", "")) for item in models if isinstance(item, dict)}
+    short_names = {name.split(":")[0] for name in names}
+    if model in names or model.split(":")[0] in short_names:
+        return True, "ok"
+    return False, "ollama_model_missing"
+
+
 def create_translator(config: dict[str, Any]) -> BaseTranslator:
     kind = str(config.get("translator_backend", "mock")).lower()
+    if kind == "disabled":
+        return DisabledTranslator("translator_disabled")
     if kind == "mock":
         return MockTranslator()
     if kind == "ollama":
         ollama = config.get("ollama", {})
+        base_url = str(ollama.get("base_url", "http://127.0.0.1:11434"))
+        model = str(ollama.get("model", "qwen2.5:3b"))
+        ok, reason = check_ollama_model(base_url, model)
+        if not ok:
+            return DisabledTranslator(reason)
         return OllamaTranslator(
-            base_url=str(ollama.get("base_url", "http://127.0.0.1:11434")),
-            model=str(ollama.get("model", "qwen2.5:3b")),
+            base_url=base_url,
+            model=model,
         )
     if kind in {"openai", "openai-compatible", "openai_compatible"}:
         openai_config = config.get("openai_compatible", {})

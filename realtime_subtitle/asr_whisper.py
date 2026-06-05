@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
 from faster_whisper import WhisperModel
 
+from .audio_capture import AudioChunk
 from .translator import BaseTranslator, TranslationRequest
 
 
@@ -37,7 +39,7 @@ class AsrSettings:
 class AsrWorker:
     def __init__(
         self,
-        audio_queue: queue.Queue[np.ndarray],
+        audio_queue: queue.Queue[AudioChunk],
         settings: AsrSettings,
         translator: BaseTranslator,
         on_text: Callable[[str, str, str], None],
@@ -79,14 +81,15 @@ class AsrWorker:
                 except queue.Empty:
                     continue
                 self.on_status("transcribing")
-                original = self._transcribe(audio)
+                original = self._transcribe(audio.samples)
                 if not original:
                     self.on_status("listening")
                     continue
                 if self.settings.display_mode != "original":
                     self.on_status("translating")
                 translated = self._translate(original)
-                display = self._format_display(original, translated)
+                latency_ms = int((time.perf_counter() - audio.captured_at) * 1000)
+                display = self._format_display(original, translated, latency_ms)
                 self.on_text(original, translated, display)
                 self.on_status("listening")
         except Exception as exc:
@@ -109,7 +112,7 @@ class AsrWorker:
         return text
 
     def _translate(self, text: str) -> str:
-        if self.settings.display_mode == "original":
+        if self.settings.display_mode == "original" or getattr(self.translator, "disabled", False):
             return ""
         request = TranslationRequest(
             text=text,
@@ -118,9 +121,12 @@ class AsrWorker:
         )
         return self.translator.translate(request)
 
-    def _format_display(self, original: str, translated: str) -> str:
+    def _format_display(self, original: str, translated: str, latency_ms: int) -> str:
+        prefix = f"[{latency_ms}ms] "
+        if getattr(self.translator, "disabled", False):
+            return f"{prefix}{original}"
         if self.settings.display_mode == "translation":
-            return translated or original
+            return f"{prefix}{translated or original}"
         if self.settings.display_mode == "bilingual":
-            return f"{original}\n{translated}" if translated else original
-        return original
+            return f"{original}\n{prefix}{translated}" if translated else f"{prefix}{original}"
+        return f"{prefix}{original}"

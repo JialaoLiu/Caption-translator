@@ -4,3 +4,4 @@ sounddevice>=0.4.6
 numpy>=1.26
 pyinstaller>=6.0
 opencc-python-reimplemented>=0.1.7
+pyqt-siliconui

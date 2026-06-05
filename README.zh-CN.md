@@ -18,9 +18,10 @@ pinned subtitle window / subtitle.txt
 
 ## 已实现功能
 
-- PyQt6 主控制窗口，自写现代深色 QSS 主题
+- PyQt6 主控制窗口，直接安装 `pyqt-siliconui` 作为 UI 依赖，并保留 PyQt6 QSS 运行时 fallback
 - 独立置顶字幕窗口，适合直播姬“窗口捕捉”或“截屏捕捉”
-- 音频输入设备选择
+- 音频模式：Mic only / System only / Mic + System
+- Windows 下使用 WASAPI loopback 捕捉电脑声音
 - ASR 模型切换：`tiny/base/small/medium/large-v3`
 - device：`cpu/cuda`
 - compute_type：`int8/float16/float32`
@@ -29,7 +30,7 @@ pinned subtitle window / subtitle.txt
 - 显示模式：原文/翻译/双语
 - 界面语言：English / 简体中文
 - 准确率模式：低延迟 / 平衡 / 准确率优先
-- 翻译后端：Mock/Ollama/OpenAI-compatible API
+- 翻译后端：默认 Ollama，另有 Disabled、OpenAI-compatible API、Mock 测试模式
 - 同时输出 UTF-8 `subtitle.txt`
 - `config.json` 保存设置，配置损坏时自动恢复默认配置
 - PyInstaller Windows 打包脚本
@@ -54,7 +55,7 @@ pip install -r requirements.txt
 python -m realtime_subtitle.main
 ```
 
-没有直接接入或复制 PyQt-SiliconUI。它偏 PyQt5，且 GPLv3 授权；本项目目前保持 PyQt6 + MIT，所以使用自写 QSS 实现类似的现代化视觉风格。
+项目已把 `pyqt-siliconui` 加入依赖，因为产品方向希望靠近 SiliconUI 的视觉风格。当前运行时仍保留 PyQt6 QSS fallback，避免 PyQt5 取向的 SiliconUI API 不可用时导致程序无法启动。
 
 ## 直播姬捕捉方式
 
@@ -110,6 +111,40 @@ API key 不要写进代码，也不要提交到 GitHub。
 不要使用 Mock。Mock 只会测试流程，不会做真实语义转换。
 
 Whisper/faster-whisper 主要负责语音转文字。粤语转普通话属于语体转换和翻译，需要 translator backend 处理；应用会在最终输出到 `Mandarin Simplified` 时强制做简体规范化，避免字幕残留繁体。
+
+## Ollama 默认翻译
+
+默认真实翻译后端是 Ollama，默认模型是：
+
+```text
+qwen2.5:3b
+```
+
+程序会检测：
+
+```text
+GET http://localhost:11434/api/tags
+```
+
+如果 Ollama 没启动，GUI 不会崩溃，会禁用翻译并显示原文。如果 Ollama 已启动但缺少模型，请运行：
+
+```powershell
+ollama pull qwen2.5:3b
+```
+
+界面里也可以选择 `qwen3:4b` 或输入其他模型名。
+
+## 音频模式
+
+- `Mic only`：只录制麦克风
+- `System only`：只录制电脑声音，Windows 下使用 WASAPI loopback
+- `Mic + System`：麦克风和电脑声音同时录制，在程序内部混音后送入单路 ASR
+
+默认是 `Mic + System`。WASAPI loopback 只负责电脑输出声音，不会自动包含麦克风。
+
+## 后续 ASR 方向
+
+当前 ASR 默认仍是 faster-whisper。后续可以评估接入 Qwen3-ASR、FunASR、SenseVoiceSmall 等模型，用于更好的粤语和中文识别。
 
 ## 免责声明
 

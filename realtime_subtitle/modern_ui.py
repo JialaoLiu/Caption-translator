@@ -4,6 +4,11 @@ from PyQt6.QtWidgets import QApplication
 
 
 def apply_modern_theme(app: QApplication) -> None:
+    try:
+        __import__("siui")
+        app.setProperty("silicon_ui_available", True)
+    except Exception:
+        app.setProperty("silicon_ui_available", False)
     app.setStyleSheet(
         """
         QMainWindow, QScrollArea, QWidget {

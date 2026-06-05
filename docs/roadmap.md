@@ -4,6 +4,7 @@
 
 - Better VAD tuning to reduce unnecessary ASR calls
 - Optional system audio capture path
+- Evaluate Qwen3-ASR, FunASR, and SenseVoiceSmall as future ASR backends
 - More reliable subtitle window resize handles
 - Translation backend presets for popular local OpenAI-compatible servers
 - Runtime logs panel and exportable diagnostics

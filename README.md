@@ -8,9 +8,11 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 
 ## Current Features
 
-- Native PyQt6 control window with a custom modern dark QSS theme
+- Native PyQt6 control window with `pyqt-siliconui` installed as a UI dependency and a PyQt6 QSS runtime fallback
 - Always-on-top pinned subtitle window for Bilibili Live Companion window capture
 - Microphone input device selection
+- Audio modes: Mic only, System only, Mic + System
+- Windows WASAPI loopback for system audio capture
 - faster-whisper ASR
 - Model switching: `tiny`, `base`, `small`, `medium`, `large-v3`
 - Runtime device selection: `cpu` or `cuda`
@@ -20,7 +22,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - App language switch: English / Simplified Chinese
 - Accuracy mode: low latency, balanced, accuracy first
 - Display modes: original, translation, bilingual
-- Translation backends: Mock, Ollama, OpenAI-compatible API
+- Translation backends: Ollama by default, Disabled, OpenAI-compatible API, Mock for testing
 - Realtime pinned subtitle display plus UTF-8 `subtitle.txt`
 - Config persistence with corrupted-config recovery
 - Windows packaging script using PyInstaller
@@ -46,7 +48,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-PyQt-SiliconUI is not bundled or copied. It is PyQt5-oriented and GPLv3 licensed, while this project currently stays PyQt6 + MIT. The current UI uses a self-written PyQt6 QSS theme.
+`pyqt-siliconui` is listed as a dependency because the product direction targets that visual style. The current runtime keeps a PyQt6 QSS fallback so the app does not break when PyQt5-oriented SiliconUI APIs are unavailable.
 
 ## Run
 
@@ -99,6 +101,32 @@ For Cantonese to natural Simplified Mandarin, use:
 - Translator backend: `Ollama` or `OpenAI-compatible API`
 
 Do not use Mock for real translation.
+
+## Ollama Default
+
+The default real translation backend is Ollama with `qwen2.5:3b`.
+
+On startup and before translation, the app checks:
+
+```text
+GET http://localhost:11434/api/tags
+```
+
+If Ollama is not running, the app does not crash. Translation is disabled and original text is shown. If Ollama is running but the model is missing, run:
+
+```powershell
+ollama pull qwen2.5:3b
+```
+
+`qwen3:4b` and custom model names are also available in the UI.
+
+## Audio Modes
+
+- `Mic only`: microphone input only
+- `System only`: Windows WASAPI loopback, computer audio only
+- `Mic + System`: microphone plus WASAPI loopback mixed inside the app, then sent to one ASR worker
+
+Mic + System is the default. The app does not assume WASAPI loopback includes microphone audio.
 
 API keys are entered in the GUI/config by the user. Do not commit private keys to GitHub.
 
