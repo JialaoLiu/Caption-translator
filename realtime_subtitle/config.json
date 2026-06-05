@@ -1,0 +1,32 @@
+{
+  "audio_device": null,
+  "model_size": "small",
+  "device": "cpu",
+  "compute_type": "int8",
+  "source_language": "auto",
+  "target_language": "zh",
+  "display_mode": "original",
+  "translator_backend": "mock",
+  "ollama": {
+    "base_url": "http://127.0.0.1:11434",
+    "model": "qwen2.5:3b"
+  },
+  "openai_compatible": {
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key": "",
+    "model": "qwen2.5-3b"
+  },
+  "chunk_seconds": 3.0,
+  "font_size": 32,
+  "opacity": 0.82,
+  "background_color": "#000000",
+  "show_border": false,
+  "pinned": true,
+  "subtitle_output": "subtitle.txt",
+  "subtitle_window": {
+    "x": 160,
+    "y": 80,
+    "width": 920,
+    "height": 150
+  }
+}
