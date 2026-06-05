@@ -48,3 +48,14 @@ Bilibili 直播姬
 - 不要默认用 CUDA
 - 不要默认用 `large-v3`
 - 先录制测试 5 到 10 分钟，确认游戏帧率和直播编码稳定
+
+## 粤语转简体普通话
+
+推荐设置：
+
+- Source Language：`Cantonese / 粤语`
+- Target Language：`Mandarin Simplified / 简体普通话`
+- Display Mode：`Translation only` 或 `Bilingual`
+- Translator Backend：`Ollama` 或 `OpenAI-compatible API`
+
+不要使用 Mock 做真实直播翻译。Mock 只用于确认字幕流程是否跑通。

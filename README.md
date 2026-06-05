@@ -8,7 +8,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 
 ## Current Features
 
-- Native PyQt6 control window, with optional PyQt-SiliconUI availability detection
+- Native PyQt6 control window with a custom modern dark QSS theme
 - Always-on-top pinned subtitle window for Bilibili Live Companion window capture
 - Microphone input device selection
 - faster-whisper ASR
@@ -16,7 +16,9 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - Runtime device selection: `cpu` or `cuda`
 - Compute type selection: `int8`, `float16`, `float32`
 - Source languages: `auto`, Cantonese (`yue`), Mandarin (`zh`), English (`en`)
-- Target languages: Chinese (`zh`), English (`en`), Cantonese (`yue`)
+- Target languages: Mandarin Simplified (`zh_hans`), Mandarin Traditional (`zh_hant`), Cantonese (`yue`), English (`en`)
+- App language switch: English / Simplified Chinese
+- Accuracy mode: low latency, balanced, accuracy first
 - Display modes: original, translation, bilingual
 - Translation backends: Mock, Ollama, OpenAI-compatible API
 - Realtime pinned subtitle display plus UTF-8 `subtitle.txt`
@@ -44,13 +46,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Optional PyQt-SiliconUI:
-
-```powershell
-pip install -r requirements-silicon.txt
-```
-
-The app falls back to plain PyQt6 styling if PyQt-SiliconUI is unavailable or incompatible.
+PyQt-SiliconUI is not bundled or copied. It is PyQt5-oriented and GPLv3 licensed, while this project currently stays PyQt6 + MIT. The current UI uses a self-written PyQt6 QSS theme.
 
 ## Run
 
@@ -91,9 +87,18 @@ Whisper/faster-whisper is used only for speech-to-text. Arbitrary language trans
 
 Backends:
 
-- `Mock`: placeholder, useful for testing the UI and pipeline
+- `Mock`: testing only, no real translation
 - `Ollama`: local HTTP API, default model field is `qwen2.5:3b`
 - `OpenAI-compatible API`: any `/v1/chat/completions` compatible endpoint
+
+For Cantonese to natural Simplified Mandarin, use:
+
+- Source language: `Cantonese / 粤语`
+- Target language: `Mandarin Simplified / 简体普通话`
+- Display mode: `Translation only` or `Bilingual`
+- Translator backend: `Ollama` or `OpenAI-compatible API`
+
+Do not use Mock for real translation.
 
 API keys are entered in the GUI/config by the user. Do not commit private keys to GitHub.
 

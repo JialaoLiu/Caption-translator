@@ -25,8 +25,13 @@ class AsrSettings:
     device: str = "cpu"
     compute_type: str = "int8"
     source_language: str = "auto"
-    target_language: str = "zh"
+    target_language: str = "zh_hans"
     display_mode: str = "original"
+    accuracy_mode: str = "balanced"
+    beam_size: int = 5
+    vad_filter: bool = True
+    no_speech_threshold: float = 0.6
+    condition_on_previous_text: bool = False
 
 
 class AsrWorker:
@@ -94,9 +99,10 @@ class AsrWorker:
         segments, _info = self._model.transcribe(
             audio,
             language=language,
-            beam_size=1,
-            vad_filter=True,
-            condition_on_previous_text=False,
+            beam_size=self.settings.beam_size,
+            vad_filter=self.settings.vad_filter,
+            no_speech_threshold=self.settings.no_speech_threshold,
+            condition_on_previous_text=self.settings.condition_on_previous_text,
             without_timestamps=True,
         )
         text = "".join(segment.text for segment in segments).strip()

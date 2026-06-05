@@ -6,11 +6,15 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from .text_normalizer import normalize_for_target_language
+
 
 LANGUAGE_NAMES = {
     "auto": "auto detected language",
     "yue": "Cantonese",
-    "zh": "Mandarin Chinese",
+    "zh": "Mandarin",
+    "zh_hans": "Mandarin Simplified Chinese",
+    "zh_hant": "Mandarin Traditional Chinese",
     "en": "English",
 }
 
@@ -23,21 +27,27 @@ class TranslationRequest:
 
 
 class BaseTranslator:
+    real_translation = False
+
     def translate(self, request: TranslationRequest) -> str:
         raise NotImplementedError
 
 
 class MockTranslator(BaseTranslator):
+    real_translation = False
+
     def translate(self, request: TranslationRequest) -> str:
         text = request.text.strip()
         if not text:
             return ""
         if request.source_language == request.target_language:
-            return text
-        return f"[{request.target_language}] {text}"
+            return normalize_for_target_language(text, request.target_language, request.source_language)
+        return normalize_for_target_language(f"[{request.target_language}] {text}", request.target_language, request.source_language)
 
 
 class OllamaTranslator(BaseTranslator):
+    real_translation = True
+
     def __init__(self, base_url: str, model: str, timeout: float = 20.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -49,7 +59,7 @@ class OllamaTranslator(BaseTranslator):
             "stream": False,
             "prompt": build_translation_prompt(request),
             "options": {
-                "temperature": 0.2,
+                "temperature": 0.15,
                 "num_predict": 90,
             },
         }
@@ -59,10 +69,16 @@ class OllamaTranslator(BaseTranslator):
             headers={"Content-Type": "application/json"},
             timeout=self.timeout,
         )
-        return str(data.get("response", "")).strip()
+        return normalize_for_target_language(
+            str(data.get("response", "")),
+            request.target_language,
+            request.source_language,
+        )
 
 
 class OpenAICompatibleTranslator(BaseTranslator):
+    real_translation = True
+
     def __init__(self, base_url: str, api_key: str, model: str, timeout: float = 25.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -76,13 +92,10 @@ class OpenAICompatibleTranslator(BaseTranslator):
         payload = {
             "model": self.model,
             "messages": [
-                {
-                    "role": "system",
-                    "content": "You translate short live-stream subtitles. Keep it brief, casual, and natural. Return only the translation.",
-                },
+                {"role": "system", "content": system_prompt_for_target(request.target_language)},
                 {"role": "user", "content": build_translation_prompt(request)},
             ],
-            "temperature": 0.2,
+            "temperature": 0.15,
             "max_tokens": 120,
         }
         data = http_json(
@@ -95,17 +108,76 @@ class OpenAICompatibleTranslator(BaseTranslator):
         if not choices:
             return ""
         message = choices[0].get("message", {})
-        return str(message.get("content", "")).strip()
+        return normalize_for_target_language(
+            str(message.get("content", "")),
+            request.target_language,
+            request.source_language,
+        )
+
+
+def system_prompt_for_target(target_language: str) -> str:
+    if target_language == "zh_hans":
+        return (
+            "You convert live subtitles into natural spoken Simplified Mandarin Chinese. "
+            "Return only the subtitle text. No explanations, no quotes, no labels."
+        )
+    if target_language == "zh_hant":
+        return (
+            "You convert live subtitles into natural spoken Traditional Chinese. "
+            "Return only the subtitle text. No explanations, no quotes, no labels."
+        )
+    if target_language == "yue":
+        return (
+            "You translate live subtitles into natural spoken Cantonese. "
+            "Return only the subtitle text. No explanations, no quotes, no labels."
+        )
+    return (
+        "You translate short gaming livestream subtitles into casual spoken English. "
+        "Return only the subtitle text. No explanations, no quotes, no labels."
+    )
 
 
 def build_translation_prompt(request: TranslationRequest) -> str:
+    text = request.text.strip()
     source = LANGUAGE_NAMES.get(request.source_language, request.source_language)
     target = LANGUAGE_NAMES.get(request.target_language, request.target_language)
+    if request.target_language == "zh_hans":
+        return (
+            f"Task: convert this live subtitle from {source} to natural spoken Simplified Mandarin Chinese.\n"
+            "Rules:\n"
+            "- Output Simplified Chinese only.\n"
+            "- If the source is Cantonese, convert the meaning and speaking style into natural Mandarin; do not merely convert Traditional to Simplified.\n"
+            "- Do not keep Cantonese particles or Cantonese sentence patterns, such as 咩, 咗, 冇, 唔, 嘅, 哋, 喎, 啫, 啱, 嚟, 吖, 啦.\n"
+            "- Keep it short and casual for realtime livestream subtitles.\n"
+            "- Do not explain, label, quote, or add extra content.\n\n"
+            "Examples:\n"
+            "Input: 你今日食咗飯未呀？\n"
+            "Output: 你今天吃饭了没有？\n"
+            "Input: 我哋等陣去邊度呀？\n"
+            "Output: 我们等一下去哪里？\n"
+            "Input: 佢啱啱同我講冇問題。\n"
+            "Output: 他刚刚跟我说没有问题。\n"
+            "Input: 唔該你幫我睇一睇。\n"
+            "Output: 麻烦你帮我看一下。\n\n"
+            f"Input: {text}\n"
+            "Output:"
+        )
+    if request.target_language == "zh_hant":
+        return (
+            f"Translate this live subtitle from {source} to natural spoken Traditional Chinese.\n"
+            "Keep it short, casual, and suitable for livestream subtitles. Return only the subtitle text.\n\n"
+            f"Text: {text}"
+        )
+    if request.target_language == "yue":
+        return (
+            f"Translate this live subtitle from {source} to natural spoken Cantonese.\n"
+            "Keep it short and conversational. Return only the subtitle text.\n\n"
+            f"Text: {text}"
+        )
     return (
         f"Translate this live subtitle from {source} to {target}.\n"
-        "Style: short, spoken, casual, suitable for gaming livestream subtitles.\n"
-        "Do not add explanations, labels, brackets, or extra commentary.\n\n"
-        f"Text:\n{request.text.strip()}"
+        "Keep it short, casual, and suitable for gaming livestream subtitles. Return only the subtitle text.\n\n"
+        f"Text: {text}"
     )
 
 

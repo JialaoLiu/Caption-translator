@@ -18,15 +18,17 @@ pinned subtitle window / subtitle.txt
 
 ## 已实现功能
 
-- PyQt6 主控制窗口，检测 PyQt-SiliconUI 可用性，不可用时自动 fallback
+- PyQt6 主控制窗口，自写现代深色 QSS 主题
 - 独立置顶字幕窗口，适合直播姬“窗口捕捉”或“截屏捕捉”
 - 音频输入设备选择
 - ASR 模型切换：`tiny/base/small/medium/large-v3`
 - device：`cpu/cuda`
 - compute_type：`int8/float16/float32`
 - 源语言：`auto/yue/zh/en`
-- 目标语言：`zh/en/yue`
+- 目标语言：`zh_hans/zh_hant/yue/en`
 - 显示模式：原文/翻译/双语
+- 界面语言：English / 简体中文
+- 准确率模式：低延迟 / 平衡 / 准确率优先
 - 翻译后端：Mock/Ollama/OpenAI-compatible API
 - 同时输出 UTF-8 `subtitle.txt`
 - `config.json` 保存设置，配置损坏时自动恢复默认配置
@@ -52,13 +54,7 @@ pip install -r requirements.txt
 python -m realtime_subtitle.main
 ```
 
-可选 PyQt-SiliconUI：
-
-```powershell
-pip install -r requirements-silicon.txt
-```
-
-如果 PyQt-SiliconUI 不兼容，应用会继续使用 PyQt6 fallback 样式。
+没有直接接入或复制 PyQt-SiliconUI。它偏 PyQt5，且 GPLv3 授权；本项目目前保持 PyQt6 + MIT，所以使用自写 QSS 实现类似的现代化视觉风格。
 
 ## 直播姬捕捉方式
 
@@ -96,11 +92,24 @@ Whisper/faster-whisper 只负责语音转文字，不负责任意语言互译。
 
 当前后端：
 
-- Mock：占位测试
-- Ollama：本地 Ollama HTTP API
-- OpenAI-compatible API：兼容 `/v1/chat/completions` 的接口
+- Mock：只用于测试流程，不做真实翻译
+- Ollama：本地 Ollama HTTP API，真实翻译
+- OpenAI-compatible API：兼容 `/v1/chat/completions` 的接口，真实翻译
 
 API key 不要写进代码，也不要提交到 GitHub。
+
+## 粤语转简体普通话推荐设置
+
+如果你要把粤语口语实时转成自然简体普通话，不是只做繁转简，请这样设置：
+
+- Source Language：`Cantonese / 粤语`
+- Target Language：`Mandarin Simplified / 简体普通话`
+- Display Mode：`Translation only` 或 `Bilingual`
+- Translator Backend：`Ollama` 或 `OpenAI-compatible API`
+
+不要使用 Mock。Mock 只会测试流程，不会做真实语义转换。
+
+Whisper/faster-whisper 主要负责语音转文字。粤语转普通话属于语体转换和翻译，需要 translator backend 处理；应用会在最终输出到 `Mandarin Simplified` 时强制做简体规范化，避免字幕残留繁体。
 
 ## 免责声明
 
