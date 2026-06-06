@@ -147,8 +147,8 @@ def ensure_asr_dependencies(model_key: str, progress: Callable[[int, str], None]
     info = ASR_MODELS[model_key]
     if info.backend == "funasr":
         ensure_python_modules(
-            imports=["funasr", "modelscope", "soundfile"],
-            packages=["funasr>=1.2.7", "modelscope>=1.20", "soundfile>=0.12"],
+            imports=["torch", "torchaudio", "funasr", "modelscope", "soundfile"],
+            packages=["torch", "torchaudio", "funasr>=1.2.7", "modelscope>=1.20", "soundfile>=0.12"],
             progress=progress,
         )
     elif info.backend == "qwen3_asr":

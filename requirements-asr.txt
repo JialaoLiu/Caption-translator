@@ -2,4 +2,6 @@ funasr>=1.2.7
 modelscope>=1.20
 huggingface_hub>=0.24
 soundfile>=0.12
+torch
+torchaudio
 qwen-asr
