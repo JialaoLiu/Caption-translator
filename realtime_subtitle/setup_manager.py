@@ -7,6 +7,7 @@ import time
 import urllib.request
 import webbrowser
 from collections.abc import Callable
+from pathlib import Path
 
 from .asr_models import download_asr_model, is_model_downloaded
 from .translator import check_ollama_model
@@ -25,6 +26,8 @@ def prepare_first_run(
     if not is_model_downloaded(asr_model_key):
         progress(5, "Downloading ASR model...")
         download_asr_model(asr_model_key, lambda value, message: progress(max(5, min(55, value // 2)), message))
+        if not is_model_downloaded(asr_model_key):
+            raise RuntimeError("ASR model download failed or produced an empty folder.")
     else:
         progress(55, "ASR model already downloaded.")
 
@@ -48,7 +51,7 @@ def prepare_first_run(
 
 
 def ensure_ollama_installed(progress: Callable[[int, str], None]) -> None:
-    if shutil.which("ollama"):
+    if find_ollama_executable():
         progress(65, "Ollama command found.")
         return
     if sys.platform == "win32" and shutil.which("winget"):
@@ -65,7 +68,7 @@ def ensure_ollama_installed(progress: Callable[[int, str], None]) -> None:
             ],
             timeout=600,
         )
-        if shutil.which("ollama"):
+        if find_ollama_executable():
             progress(70, "Ollama installed.")
             return
     progress(65, "Ollama is not installed. Opening download page...")
@@ -74,12 +77,13 @@ def ensure_ollama_installed(progress: Callable[[int, str], None]) -> None:
 
 
 def start_ollama_if_possible(progress: Callable[[int, str], None]) -> None:
-    if not shutil.which("ollama"):
+    ollama = find_ollama_executable()
+    if not ollama:
         return
     progress(70, "Starting Ollama service...")
     try:
         subprocess.Popen(
-            ["ollama", "serve"],
+            [ollama, "serve"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
@@ -94,10 +98,11 @@ def start_ollama_if_possible(progress: Callable[[int, str], None]) -> None:
 
 
 def pull_ollama_model(model: str, progress: Callable[[int, str], None]) -> None:
-    if not shutil.which("ollama"):
+    ollama = find_ollama_executable()
+    if not ollama:
         raise RuntimeError("Ollama command is not available.")
     process = subprocess.Popen(
-        ["ollama", "pull", model],
+        [ollama, "pull", model],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -137,3 +142,18 @@ def ollama_service_running() -> bool:
             return True
     except Exception:
         return False
+
+
+def find_ollama_executable() -> str | None:
+    found = shutil.which("ollama")
+    if found:
+        return found
+    candidates = []
+    if sys.platform == "win32":
+        local = Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"
+        program_files = Path("C:/Program Files/Ollama/ollama.exe")
+        candidates.extend([local, program_files])
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return None

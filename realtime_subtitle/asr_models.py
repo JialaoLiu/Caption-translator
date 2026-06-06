@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from typing import Callable
 
 from .app_config import runtime_root
@@ -72,7 +73,14 @@ def model_local_dir(model_key: str) -> Path:
 
 def is_model_downloaded(model_key: str) -> bool:
     path = model_local_dir(model_key)
-    return path.exists() and any(path.iterdir())
+    if not path.exists() or not any(path.iterdir()):
+        return False
+    info = ASR_MODELS[model_key]
+    if info.source == "modelscope":
+        return any(path.glob("*.bin")) or any(path.glob("*.pt")) or any(path.glob("*.onnx")) or any(path.glob("configuration.json"))
+    if info.source == "huggingface":
+        return any(path.glob("*.bin")) or any(path.glob("*.safetensors")) or any(path.glob("config.json"))
+    return any(path.iterdir())
 
 
 def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> Path:
@@ -104,5 +112,8 @@ def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> 
         snapshot_download(info.repo_id, local_dir=str(target))
     else:
         raise RuntimeError(f"Unsupported model source: {info.source}")
+    if not is_model_downloaded(model_key):
+        shutil.rmtree(target, ignore_errors=True)
+        raise RuntimeError(f"Model download did not produce usable files: {info.label}")
     progress(100, f"Downloaded {info.label}.")
     return target
