@@ -71,7 +71,12 @@ class ControlWindow(QMainWindow):
         self.audio_capture: AudioCapture | None = None
         self.asr_worker: AsrWorker | None = None
         self.output = SubtitleTextOutput(subtitle_output_path(self.config))
-        self.subtitle_window = SubtitleWindow(self.config, on_close_app=self.exit_app)
+        self.subtitle_window = SubtitleWindow(
+            self.config,
+            on_close_app=self.exit_app,
+            on_display_mode_change=self._set_display_mode_from_subtitle,
+            on_font_size_change=self._set_font_size_from_subtitle,
+        )
         self.signals = UiSignals()
         self.signals.subtitle_ready.connect(self._handle_subtitle)
         self.signals.status_ready.connect(self._set_status)
@@ -142,6 +147,9 @@ class ControlWindow(QMainWindow):
         self.display_combo.addItem("Translation only / 只显示译文", "translation")
         self.display_combo.addItem("Bilingual / 原文+译文", "bilingual")
         self.display_combo.addItem("Original only / 只显示原文", "original")
+        self.display_combo.currentIndexChanged.connect(
+            lambda: self.subtitle_window.set_display_mode(str(self.display_combo.currentData()))
+        )
         quick_form.addRow(self._label("display_mode"), self.display_combo)
 
         self.translator_combo = NoWheelComboBox()
@@ -320,6 +328,8 @@ class ControlWindow(QMainWindow):
                     "model": self.openai_model_edit.text().strip(),
                 },
                 "subtitle_window": self.subtitle_window.state(),
+                "font_size": self.subtitle_window.label.font().pointSize(),
+                "pinned": self.subtitle_window.is_pinned(),
             }
         )
         return self.config
@@ -407,6 +417,13 @@ class ControlWindow(QMainWindow):
     def _handle_subtitle(self, _original: str, _translated: str, display: str) -> None:
         self.subtitle_window.set_subtitle(display)
         self.output.write(display)
+
+    def _set_display_mode_from_subtitle(self, mode: str) -> None:
+        self._set_combo_data(self.display_combo, mode)
+        self.config["display_mode"] = mode
+
+    def _set_font_size_from_subtitle(self, size: int) -> None:
+        self.config["font_size"] = size
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         for control in (

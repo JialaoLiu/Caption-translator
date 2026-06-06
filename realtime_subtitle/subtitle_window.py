@@ -4,11 +4,17 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QPoint, QRect, Qt
 from PyQt6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent
-from PyQt6.QtWidgets import QLabel, QMenu, QSizeGrip, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QMenu, QPushButton, QSizeGrip, QVBoxLayout, QWidget
 
 
 class SubtitleWindow(QWidget):
-    def __init__(self, config: dict | None = None, on_close_app: Callable[[], None] | None = None) -> None:
+    def __init__(
+        self,
+        config: dict | None = None,
+        on_close_app: Callable[[], None] | None = None,
+        on_display_mode_change: Callable[[str], None] | None = None,
+        on_font_size_change: Callable[[int], None] | None = None,
+    ) -> None:
         super().__init__()
         config = config or {}
         window_config = config.get("subtitle_window", {})
@@ -20,7 +26,10 @@ class SubtitleWindow(QWidget):
         self._line_mode = str(config.get("line_mode", "auto"))
         self._max_chars = int(config.get("max_chars", 120))
         self._word_wrap = bool(config.get("word_wrap", True))
+        self._display_mode = str(config.get("display_mode", "translation"))
         self._on_close_app = on_close_app
+        self._on_display_mode_change = on_display_mode_change
+        self._on_font_size_change = on_font_size_change
         self._menu_labels = {
             "hide": "Hide",
             "show_border": "Show Border",
@@ -32,6 +41,35 @@ class SubtitleWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+        self.toolbar = QWidget(self)
+        self.toolbar.setObjectName("subtitleToolbar")
+        self.pin_button = QPushButton()
+        self.translation_button = QPushButton("译文")
+        self.bilingual_button = QPushButton("双语")
+        self.font_up_button = QPushButton("A+")
+        self.font_down_button = QPushButton("A-")
+        self.close_button = QPushButton("×")
+        for button in (
+            self.pin_button,
+            self.translation_button,
+            self.bilingual_button,
+            self.font_up_button,
+            self.font_down_button,
+            self.close_button,
+        ):
+            button.setFixedHeight(26)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        toolbar_layout = QHBoxLayout(self.toolbar)
+        toolbar_layout.setContentsMargins(8, 6, 8, 2)
+        toolbar_layout.setSpacing(6)
+        toolbar_layout.addWidget(self.pin_button)
+        toolbar_layout.addWidget(self.translation_button)
+        toolbar_layout.addWidget(self.bilingual_button)
+        toolbar_layout.addStretch(1)
+        toolbar_layout.addWidget(self.font_down_button)
+        toolbar_layout.addWidget(self.font_up_button)
+        toolbar_layout.addWidget(self.close_button)
 
         self.label = QLabel("Waiting for speech...")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -47,6 +85,7 @@ class SubtitleWindow(QWidget):
         self.size_grip = QSizeGrip(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.toolbar)
         layout.addWidget(self.label)
 
         width = int(window_config.get("width", 920))
@@ -56,6 +95,9 @@ class SubtitleWindow(QWidget):
         self.setGeometry(QRect(x, y, width, height))
         self.set_opacity(float(config.get("opacity", 0.82)))
         self._apply_flags()
+        self._connect_toolbar()
+        self._update_toolbar()
+        self.toolbar.hide()
         self.apply_style()
 
     def set_subtitle(self, text: str) -> None:
@@ -76,8 +118,10 @@ class SubtitleWindow(QWidget):
 
     def set_font_size(self, size: int) -> None:
         font = self.label.font()
-        font.setPointSize(size)
+        font.setPointSize(max(16, min(96, size)))
         self.label.setFont(font)
+        if self._on_font_size_change:
+            self._on_font_size_change(font.pointSize())
 
     def set_font_color(self, color: str) -> None:
         self._font_color = color
@@ -100,6 +144,11 @@ class SubtitleWindow(QWidget):
         self._pinned = pinned
         self._apply_flags()
         self.show()
+        self._update_toolbar()
+
+    def set_display_mode(self, mode: str) -> None:
+        self._display_mode = mode
+        self._update_toolbar()
 
     def set_line_mode(self, mode: str) -> None:
         self._line_mode = mode
@@ -127,6 +176,9 @@ class SubtitleWindow(QWidget):
             "height": geometry.height(),
         }
 
+    def is_pinned(self) -> bool:
+        return self._pinned
+
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         size = self.size_grip.sizeHint()
@@ -137,6 +189,14 @@ class SubtitleWindow(QWidget):
             event.ignore()
             return
         super().keyPressEvent(event)
+
+    def enterEvent(self, event) -> None:  # type: ignore[override]
+        self.toolbar.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # type: ignore[override]
+        self.toolbar.hide()
+        super().leaveEvent(event)
 
     def apply_style(self) -> None:
         bg = QColor(self._background_color)
@@ -158,6 +218,24 @@ class SubtitleWindow(QWidget):
                 background: transparent;
                 border: 0;
             }}
+            QWidget#subtitleToolbar {{
+                background-color: rgba(20, 24, 31, 225);
+                border: 0;
+            }}
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 35);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 70);
+                border-radius: 5px;
+                padding: 2px 8px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(90, 167, 255, 120);
+            }}
+            QPushButton:checked {{
+                background-color: rgba(90, 167, 255, 190);
+            }}
             QSizeGrip {{
                 background: transparent;
                 width: 18px;
@@ -166,6 +244,27 @@ class SubtitleWindow(QWidget):
             }}
             """
         )
+
+    def _connect_toolbar(self) -> None:
+        self.pin_button.clicked.connect(lambda: self.set_pinned(not self._pinned))
+        self.translation_button.clicked.connect(lambda: self._change_display_mode("translation"))
+        self.bilingual_button.clicked.connect(lambda: self._change_display_mode("bilingual"))
+        self.font_up_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() + 2))
+        self.font_down_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() - 2))
+        self.close_button.clicked.connect(lambda: self._on_close_app() if self._on_close_app else None)
+
+    def _change_display_mode(self, mode: str) -> None:
+        self._display_mode = mode
+        self._update_toolbar()
+        if self._on_display_mode_change:
+            self._on_display_mode_change(mode)
+
+    def _update_toolbar(self) -> None:
+        self.pin_button.setText("Pinned" if self._pinned else "Pin")
+        self.translation_button.setCheckable(True)
+        self.bilingual_button.setCheckable(True)
+        self.translation_button.setChecked(self._display_mode == "translation")
+        self.bilingual_button.setChecked(self._display_mode == "bilingual")
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
