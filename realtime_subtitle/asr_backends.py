@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Protocol
+from urllib import request
+from urllib.error import HTTPError, URLError
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -110,6 +113,55 @@ class Qwen3AsrBackend:
         return str(getattr(result[0], "text", "")).strip()
 
 
+class OpenAICompatibleAsrBackend:
+    def __init__(self, base_url: str, api_key: str, model: str) -> None:
+        self.base_url = (base_url or "http://127.0.0.1:8000/v1").rstrip("/")
+        self.api_key = api_key.strip()
+        self.model = model.strip() or "sensevoice"
+
+    def transcribe(self, audio: np.ndarray, source_language: str) -> str:
+        wav_path = write_temp_wav(audio)
+        try:
+            fields = {"model": self.model}
+            language = api_language(source_language)
+            if language:
+                fields["language"] = language
+            body, content_type = build_multipart(fields, "file", "audio.wav", Path(wav_path).read_bytes())
+            headers = {"Content-Type": content_type}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            req = request.Request(
+                f"{self.base_url}/audio/transcriptions",
+                data=body,
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with request.urlopen(req, timeout=120) as response:
+                    payload = response.read().decode("utf-8", errors="replace")
+            except HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"ASR API error {exc.code}: {detail}") from exc
+            except URLError as exc:
+                raise RuntimeError(f"ASR API unavailable: {exc.reason}") from exc
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                return payload.strip()
+            if isinstance(data, dict):
+                text = data.get("text") or data.get("transcription")
+                if text is not None:
+                    return str(text).strip()
+                choices = data.get("choices")
+                if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                    message = choices[0].get("message", {})
+                    if isinstance(message, dict) and message.get("content"):
+                        return str(message["content"]).strip()
+            return str(data).strip()
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+
+
 def write_temp_wav(audio: np.ndarray) -> str:
     try:
         import soundfile as sf
@@ -124,9 +176,9 @@ def write_temp_wav(audio: np.ndarray) -> str:
 def funasr_language(source_language: str) -> str:
     return {
         "auto": "auto",
-        "yue": "粤语",
-        "zh": "中文",
-        "en": "英文",
+        "yue": "yue",
+        "zh": "zh",
+        "en": "en",
     }.get(source_language, "auto")
 
 
@@ -137,3 +189,37 @@ def qwen_language(source_language: str) -> str | None:
         "zh": "Chinese",
         "en": "English",
     }.get(source_language)
+
+
+def api_language(source_language: str) -> str | None:
+    return {
+        "auto": None,
+        "yue": "yue",
+        "zh": "zh",
+        "en": "en",
+    }.get(source_language)
+
+
+def build_multipart(fields: dict[str, str], file_field: str, filename: str, file_bytes: bytes) -> tuple[bytes, str]:
+    boundary = "caption-translator-boundary"
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.extend(
+            [
+                f"--{boundary}\r\n".encode("ascii"),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("ascii"),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    parts.extend(
+        [
+            f"--{boundary}\r\n".encode("ascii"),
+            f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'.encode("ascii"),
+            b"Content-Type: audio/wav\r\n\r\n",
+            file_bytes,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("ascii"),
+        ]
+    )
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"

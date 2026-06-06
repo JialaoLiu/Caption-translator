@@ -11,7 +11,7 @@ GitHub 仓库：[JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Capt
 - 音频模式：Mic only / System only / Mic + System
 - Windows WASAPI loopback 捕捉电脑声音
 - 默认 ASR：SenseVoiceSmall 234M
-- 可选 ASR 引擎：Qwen3-ASR-0.6B、Qwen3-ASR-1.7B、Fun-ASR-Nano
+- 可选 ASR 引擎：Qwen3-ASR-0.6B、Qwen3-ASR-1.7B、Fun-ASR-Nano、vLLM/FunASR OpenAI-compatible ASR server
 - 默认翻译后端：Ollama
 - 备用翻译后端：Disabled、OpenAI-compatible API
 - 默认配置：auto 源语言、简体普通话目标语言、只显示译文、CPU int8
@@ -40,6 +40,38 @@ models/asr/
 ```
 
 默认推荐模型是 SenseVoiceSmall 234M。
+
+## 可选 vLLM / FunASR Server ASR
+
+高精度或高显存 ASR 不适合直接塞进普通 exe。更合理的方式是让 vLLM/FunASR 在本机启动 OpenAI-compatible 转写服务，Caption translator 只负责连接服务。
+
+Qwen3-ASR via vLLM：
+
+```powershell
+vllm serve Qwen/Qwen3-ASR-1.7B
+```
+
+然后在高级设置里选择 `Qwen3-ASR vLLM server`：
+
+```text
+ASR 服务地址：http://127.0.0.1:8000/v1
+ASR 服务模型：Qwen/Qwen3-ASR-1.7B
+```
+
+FunASR OpenAI-compatible server：
+
+```powershell
+funasr-server --model sensevoice --device cuda
+```
+
+然后在高级设置里选择 `FunASR/vLLM OpenAI-compatible ASR server`：
+
+```text
+ASR 服务地址：http://127.0.0.1:8000/v1
+ASR 服务模型：sensevoice
+```
+
+Server ASR 模式不会在软件里下载本地 ASR 权重，模型加载和 GPU/CPU 占用由外部服务负责。
 
 ## Mock 是什么
 

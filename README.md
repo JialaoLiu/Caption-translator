@@ -14,7 +14,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - Audio modes: Mic only, System only, Mic + System
 - Windows WASAPI loopback for system audio capture
 - Default ASR: SenseVoiceSmall 234M
-- Optional ASR engines: Qwen3-ASR-0.6B, Qwen3-ASR-1.7B, Fun-ASR-Nano
+- Optional ASR engines: Qwen3-ASR-0.6B, Qwen3-ASR-1.7B, Fun-ASR-Nano, OpenAI-compatible ASR server mode for vLLM/FunASR
 - Model switching: `tiny`, `base`, `small`, `medium`, `large-v3`
 - Runtime device selection: `cpu` or `cuda`
 - Compute type selection: `int8`, `float16`, `float32`
@@ -32,8 +32,8 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 
 For PUBG plus Bilibili Live Companion:
 
-- Start with `small + cpu + int8`
-- If CPU usage is too high, switch to `base` or `tiny`
+- Start with `SenseVoiceSmall + cpu`
+- If CPU usage is too high, increase the chunk interval or switch to a server/GPU ASR setup after testing
 - Do not default to CUDA, because it can compete with the game and stream encoder
 - Do not use `medium` or `large-v3` during gameplay unless you have tested your headroom
 - Keep the chunk interval around `2` to `3` seconds
@@ -66,6 +66,38 @@ pip install -r requirements-asr.txt
 ```
 
 Then open Advanced settings, choose an ASR engine, and click `Download ASR model`. The app shows download progress and stores models under `models/asr/`. The default recommended model is SenseVoiceSmall.
+
+## Optional vLLM / FunASR Server ASR
+
+For high-accuracy or GPU-heavy ASR, run the model as an OpenAI-compatible transcription service and let Caption translator connect to it. This keeps the normal Windows app lightweight and avoids bundling vLLM into the exe.
+
+Qwen3-ASR via vLLM:
+
+```powershell
+vllm serve Qwen/Qwen3-ASR-1.7B
+```
+
+Then choose `Qwen3-ASR vLLM server` in Advanced settings:
+
+```text
+ASR server URL: http://127.0.0.1:8000/v1
+ASR server model: Qwen/Qwen3-ASR-1.7B
+```
+
+FunASR OpenAI-compatible server:
+
+```powershell
+funasr-server --model sensevoice --device cuda
+```
+
+Then choose `FunASR/vLLM OpenAI-compatible ASR server`:
+
+```text
+ASR server URL: http://127.0.0.1:8000/v1
+ASR server model: sensevoice
+```
+
+Server ASR mode does not download local ASR weights inside the app. The server owns model loading and GPU/CPU resource usage.
 
 ## Bilibili Live Companion Capture
 

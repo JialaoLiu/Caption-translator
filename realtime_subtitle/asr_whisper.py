@@ -8,7 +8,7 @@ from typing import Callable
 
 import numpy as np
 
-from .asr_backends import FasterWhisperBackend, FunAsrBackend, Qwen3AsrBackend
+from .asr_backends import FasterWhisperBackend, FunAsrBackend, OpenAICompatibleAsrBackend, Qwen3AsrBackend
 from .audio_capture import AudioChunk
 from .translator import BaseTranslator, TranslationRequest
 
@@ -28,6 +28,9 @@ class AsrSettings:
     condition_on_previous_text: bool = False
     asr_backend: str = "faster_whisper"
     asr_model_key: str = "faster_whisper_small"
+    asr_api_base_url: str = "http://127.0.0.1:8000/v1"
+    asr_api_key: str = ""
+    asr_api_model: str = "sensevoice"
 
 
 class AsrWorker:
@@ -90,6 +93,12 @@ class AsrWorker:
             return FunAsrBackend(self.settings.asr_model_key, self.settings.device)
         if self.settings.asr_backend == "qwen3_asr":
             return Qwen3AsrBackend(self.settings.asr_model_key, self.settings.device)
+        if self.settings.asr_backend == "openai_asr_api":
+            return OpenAICompatibleAsrBackend(
+                self.settings.asr_api_base_url,
+                self.settings.asr_api_key,
+                self.settings.asr_api_model,
+            )
         return FasterWhisperBackend(
             model_size=self.settings.model_size,
             device=self.settings.device,

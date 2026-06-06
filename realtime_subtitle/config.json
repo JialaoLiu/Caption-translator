@@ -26,6 +26,11 @@
     "api_key": "",
     "model": "qwen2.5-3b"
   },
+  "asr_api": {
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key": "",
+    "model": "sensevoice"
+  },
   "chunk_seconds": 3.0,
   "font_size": 32,
   "font_family": "Microsoft YaHei UI",

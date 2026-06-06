@@ -61,6 +61,22 @@ ASR_MODELS: dict[str, AsrModelInfo] = {
         source="huggingface",
         local_dir_name="Qwen3-ASR-1.7B",
     ),
+    "funasr_server": AsrModelInfo(
+        key="funasr_server",
+        label="FunASR/vLLM OpenAI-compatible ASR server",
+        backend="openai_asr_api",
+        repo_id="fun-asr-nano",
+        source="server",
+        local_dir_name="server",
+    ),
+    "qwen3_vllm_server": AsrModelInfo(
+        key="qwen3_vllm_server",
+        label="Qwen3-ASR vLLM server",
+        backend="openai_asr_api",
+        repo_id="Qwen/Qwen3-ASR-1.7B",
+        source="server",
+        local_dir_name="server",
+    ),
 }
 
 
@@ -93,6 +109,9 @@ def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> 
     target.mkdir(parents=True, exist_ok=True)
     if info.source == "builtin":
         progress(100, "faster-whisper downloads automatically on first use.")
+        return target
+    if info.source == "server":
+        progress(100, "Server mode does not download local ASR weights.")
         return target
     ensure_asr_dependencies(model_key, progress)
     progress(5, f"Preparing {info.label}...")

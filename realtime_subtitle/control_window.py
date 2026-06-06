@@ -179,11 +179,26 @@ class ControlWindow(QMainWindow):
         self.model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
         advanced_form.addRow(self._label("asr_model"), self.model_combo)
         self.asr_model_combo = NoWheelComboBox()
-        for key in ("sensevoice_small", "qwen3_asr_0_6b", "qwen3_asr_1_7b", "fun_asr_nano"):
+        for key in (
+            "sensevoice_small",
+            "qwen3_asr_0_6b",
+            "qwen3_asr_1_7b",
+            "fun_asr_nano",
+            "funasr_server",
+            "qwen3_vllm_server",
+        ):
             info = ASR_MODELS[key]
             self.asr_model_combo.addItem(info.label, info.key)
         self.asr_model_combo.currentIndexChanged.connect(self._update_asr_download_state)
+        self.asr_model_combo.currentIndexChanged.connect(self._sync_asr_server_model)
         advanced_form.addRow(self._label("asr_engine"), self.asr_model_combo)
+        self.asr_api_url_edit = QLineEdit()
+        self.asr_api_key_edit = QLineEdit()
+        self.asr_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.asr_api_model_edit = QLineEdit()
+        advanced_form.addRow(self._label("asr_api_url"), self.asr_api_url_edit)
+        advanced_form.addRow(self._label("asr_api_key"), self.asr_api_key_edit)
+        advanced_form.addRow(self._label("asr_api_model"), self.asr_api_model_edit)
         self.download_asr_button = QPushButton()
         self.download_asr_button.clicked.connect(self._download_selected_asr_model)
         advanced_form.addRow(self._label("download_asr_model"), self.download_asr_button)
@@ -287,6 +302,10 @@ class ControlWindow(QMainWindow):
         self.openai_url_edit.setText(str(openai_config.get("base_url", "http://127.0.0.1:8000/v1")))
         self.openai_key_edit.setText(str(openai_config.get("api_key", "")))
         self.openai_model_edit.setText(str(openai_config.get("model", "qwen2.5-3b")))
+        asr_api_config = self.config.get("asr_api", {})
+        self.asr_api_url_edit.setText(str(asr_api_config.get("base_url", "http://127.0.0.1:8000/v1")))
+        self.asr_api_key_edit.setText(str(asr_api_config.get("api_key", "")))
+        self.asr_api_model_edit.setText(str(asr_api_config.get("model", "sensevoice")))
         self._update_translator_fields()
         self._set_status("idle")
 
@@ -331,6 +350,11 @@ class ControlWindow(QMainWindow):
                     "api_key": self.openai_key_edit.text().strip(),
                     "model": self.openai_model_edit.text().strip(),
                 },
+                "asr_api": {
+                    "base_url": self.asr_api_url_edit.text().strip() or "http://127.0.0.1:8000/v1",
+                    "api_key": self.asr_api_key_edit.text().strip(),
+                    "model": self.asr_api_model_edit.text().strip() or self._default_asr_server_model(),
+                },
                 "subtitle_window": self.subtitle_window.state(),
                 "font_size": self.subtitle_window.label.font().pointSize(),
                 "pinned": self.subtitle_window.is_pinned(),
@@ -353,6 +377,9 @@ class ControlWindow(QMainWindow):
             vad_filter=self.vad_check.isChecked(),
             no_speech_threshold=self.no_speech_spin.value(),
             condition_on_previous_text=self.condition_check.isChecked(),
+            asr_api_base_url=self.asr_api_url_edit.text().strip() or "http://127.0.0.1:8000/v1",
+            asr_api_key=self.asr_api_key_edit.text().strip(),
+            asr_api_model=self.asr_api_model_edit.text().strip() or self._default_asr_server_model(),
         )
 
     def start(self) -> None:
@@ -360,7 +387,7 @@ class ControlWindow(QMainWindow):
         save_config(config)
         asr_key = str(self.asr_model_combo.currentData())
         asr_info = ASR_MODELS[asr_key]
-        if asr_info.source != "builtin" and not is_model_downloaded(asr_key):
+        if asr_info.source not in ("builtin", "server") and not is_model_downloaded(asr_key):
             message = f"{tr(self.lang, 'download_asr_first')} {asr_info.label}"
             self.hint_label.setText(message)
             self._set_download_progress(0, message)
@@ -441,6 +468,9 @@ class ControlWindow(QMainWindow):
             self.ollama_model_combo,
             self.model_combo,
             self.asr_model_combo,
+            self.asr_api_url_edit,
+            self.asr_api_key_edit,
+            self.asr_api_model_edit,
             self.device_combo,
             self.compute_combo,
             self.accuracy_combo,
@@ -544,9 +574,29 @@ class ControlWindow(QMainWindow):
             self.download_asr_button.setEnabled(False)
             self.download_progress.setValue(100)
             return
+        if info.source == "server":
+            self.download_asr_button.setEnabled(False)
+            self.download_progress.setValue(100)
+            self.hint_label.setText(tr(self.lang, "asr_server_hint"))
+            return
         downloaded = is_model_downloaded(key)
         self.download_asr_button.setEnabled(not downloaded and self.asr_worker is None)
         self.download_progress.setValue(100 if downloaded else 0)
+
+    def _sync_asr_server_model(self) -> None:
+        key = str(self.asr_model_combo.currentData())
+        if ASR_MODELS[key].source != "server":
+            return
+        self.asr_api_model_edit.setText(self._default_asr_server_model())
+        self._update_asr_download_state()
+
+    def _default_asr_server_model(self) -> str:
+        key = str(self.asr_model_combo.currentData())
+        if key == "qwen3_vllm_server":
+            return "Qwen/Qwen3-ASR-1.7B"
+        if key == "funasr_server":
+            return "sensevoice"
+        return "sensevoice"
 
     def _download_selected_asr_model(self) -> None:
         key = str(self.asr_model_combo.currentData())
