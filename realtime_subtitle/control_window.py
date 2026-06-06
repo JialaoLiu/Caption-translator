@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QProgressBar,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .app_config import APP_NAME, load_config, save_config, subtitle_output_path
+from .asr_models import ASR_MODELS, download_asr_model, is_model_downloaded
 from .asr_whisper import AsrSettings, AsrWorker
 from .audio_capture import AudioCapture, list_input_devices, list_system_output_devices
 from .i18n import tr
@@ -52,6 +54,8 @@ class NoWheelDoubleSpinBox(QDoubleSpinBox):
 class UiSignals(QObject):
     subtitle_ready = pyqtSignal(str, str, str)
     status_ready = pyqtSignal(str)
+    download_progress = pyqtSignal(int, str)
+    download_done = pyqtSignal(str)
 
 
 class ControlWindow(QMainWindow):
@@ -71,6 +75,9 @@ class ControlWindow(QMainWindow):
         self.signals = UiSignals()
         self.signals.subtitle_ready.connect(self._handle_subtitle)
         self.signals.status_ready.connect(self._set_status)
+        self.signals.download_progress.connect(self._set_download_progress)
+        self.signals.download_done.connect(self._download_done)
+        self._download_thread = None
 
         self.mic_devices = list_input_devices()
         self.system_devices = list_system_output_devices()
@@ -141,7 +148,6 @@ class ControlWindow(QMainWindow):
         self.translator_combo.addItem("Ollama / 本地真实翻译", "ollama")
         self.translator_combo.addItem("Disabled / 禁用翻译", "disabled")
         self.translator_combo.addItem("OpenAI-compatible / API 翻译", "openai_compatible")
-        self.translator_combo.addItem("Mock / 测试用", "mock")
         self.translator_combo.currentIndexChanged.connect(self._update_translator_fields)
         self.translator_combo.currentIndexChanged.connect(self._check_ollama_status)
         quick_form.addRow(self._label("backend"), self.translator_combo)
@@ -160,6 +166,18 @@ class ControlWindow(QMainWindow):
         self.model_combo = NoWheelComboBox()
         self.model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
         advanced_form.addRow(self._label("asr_model"), self.model_combo)
+        self.asr_model_combo = NoWheelComboBox()
+        for info in ASR_MODELS.values():
+            self.asr_model_combo.addItem(info.label, info.key)
+        self.asr_model_combo.currentIndexChanged.connect(self._update_asr_download_state)
+        advanced_form.addRow(self._label("asr_engine"), self.asr_model_combo)
+        self.download_asr_button = QPushButton()
+        self.download_asr_button.clicked.connect(self._download_selected_asr_model)
+        advanced_form.addRow(self._label("download_asr_model"), self.download_asr_button)
+        self.download_progress = QProgressBar()
+        self.download_progress.setRange(0, 100)
+        self.download_progress.setValue(0)
+        advanced_form.addRow(self._label("download_progress"), self.download_progress)
         self.device_combo = NoWheelComboBox()
         self.device_combo.addItems(["cpu", "cuda"])
         advanced_form.addRow(self._label("device"), self.device_combo)
@@ -240,6 +258,7 @@ class ControlWindow(QMainWindow):
         self._set_combo_data(self.display_combo, self.config.get("display_mode", "translation"))
         self._set_combo_data(self.translator_combo, self.config.get("translator_backend", "ollama"))
         self._set_combo_text(self.model_combo, self.config.get("model_size", "small"))
+        self._set_combo_data(self.asr_model_combo, self.config.get("asr_model_key", "faster_whisper_small"))
         self._set_combo_text(self.device_combo, self.config.get("device", "cpu"))
         self._set_combo_text(self.compute_combo, self.config.get("compute_type", "int8"))
         self._set_combo_data(self.accuracy_combo, self.config.get("accuracy_mode", "balanced"))
@@ -280,6 +299,8 @@ class ControlWindow(QMainWindow):
                 "display_mode": self.display_combo.currentData(),
                 "translator_backend": self.translator_combo.currentData(),
                 "model_size": self.model_combo.currentText(),
+                "asr_model_key": self.asr_model_combo.currentData(),
+                "asr_backend": ASR_MODELS[str(self.asr_model_combo.currentData())].backend,
                 "device": self.device_combo.currentText(),
                 "compute_type": self.compute_combo.currentText(),
                 "accuracy_mode": self.accuracy_combo.currentData(),
@@ -305,6 +326,8 @@ class ControlWindow(QMainWindow):
     def _settings(self) -> AsrSettings:
         return AsrSettings(
             model_size=self.model_combo.currentText(),
+            asr_model_key=str(self.asr_model_combo.currentData()),
+            asr_backend=ASR_MODELS[str(self.asr_model_combo.currentData())].backend,
             device=self.device_combo.currentText(),
             compute_type=self.compute_combo.currentText(),
             source_language=str(self.source_combo.currentData()),
@@ -387,6 +410,7 @@ class ControlWindow(QMainWindow):
             self.translator_combo,
             self.ollama_model_combo,
             self.model_combo,
+            self.asr_model_combo,
             self.device_combo,
             self.compute_combo,
             self.accuracy_combo,
@@ -466,6 +490,7 @@ class ControlWindow(QMainWindow):
         self.start_button.setText(tr(self.lang, "start"))
         self.stop_button.setText(tr(self.lang, "stop"))
         self.exit_button.setText(tr(self.lang, "exit"))
+        self.download_asr_button.setText(tr(self.lang, "download_asr_model"))
         self.mic_combo.setItemText(0, tr(self.lang, "default_input"))
         self.system_combo.setItemText(0, tr(self.lang, "default_system_output"))
         self.subtitle_window.set_menu_labels(tr(self.lang, "hide"), tr(self.lang, "show_border"), tr(self.lang, "close_app"))
@@ -473,6 +498,47 @@ class ControlWindow(QMainWindow):
             key = label.property("i18n_key")
             if key:
                 label.setText(tr(self.lang, str(key)))
+        self._update_asr_download_state()
+
+    def _update_asr_download_state(self) -> None:
+        key = str(self.asr_model_combo.currentData())
+        info = ASR_MODELS[key]
+        if info.source == "builtin":
+            self.download_asr_button.setEnabled(False)
+            self.download_progress.setValue(100)
+            return
+        downloaded = is_model_downloaded(key)
+        self.download_asr_button.setEnabled(not downloaded and self.asr_worker is None)
+        self.download_progress.setValue(100 if downloaded else 0)
+
+    def _download_selected_asr_model(self) -> None:
+        key = str(self.asr_model_combo.currentData())
+        self.download_asr_button.setEnabled(False)
+        self.download_progress.setValue(0)
+
+        def worker() -> None:
+            try:
+                download_asr_model(
+                    key,
+                    lambda value, message: self.signals.download_progress.emit(value, message),
+                )
+                self.signals.download_done.emit("ok")
+            except Exception as exc:
+                self.signals.download_done.emit(f"error: {exc}")
+
+        import threading
+
+        self._download_thread = threading.Thread(target=worker, name="asr-model-download", daemon=True)
+        self._download_thread.start()
+
+    def _set_download_progress(self, value: int, message: str) -> None:
+        self.download_progress.setValue(value)
+        self.hint_label.setText(message)
+
+    def _download_done(self, status: str) -> None:
+        self._update_asr_download_state()
+        if status != "ok":
+            self.hint_label.setText(status)
 
     def _drain_audio_queue(self) -> None:
         while True:

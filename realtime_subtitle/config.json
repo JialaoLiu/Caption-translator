@@ -3,6 +3,8 @@
   "system_audio_device": null,
   "audio_mode": "mic_plus_system",
   "model_size": "small",
+  "asr_backend": "faster_whisper",
+  "asr_model_key": "faster_whisper_small",
   "device": "cpu",
   "compute_type": "int8",
   "source_language": "auto",

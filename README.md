@@ -14,6 +14,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - Audio modes: Mic only, System only, Mic + System
 - Windows WASAPI loopback for system audio capture
 - faster-whisper ASR
+- Optional ASR engines: Fun-ASR-Nano, SenseVoiceSmall, Qwen3-ASR-0.6B, Qwen3-ASR-1.7B
 - Model switching: `tiny`, `base`, `small`, `medium`, `large-v3`
 - Runtime device selection: `cpu` or `cuda`
 - Compute type selection: `int8`, `float16`, `float32`
@@ -22,7 +23,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - App language switch: English / Simplified Chinese
 - Accuracy mode: low latency, balanced, accuracy first
 - Display modes: original, translation, bilingual
-- Translation backends: Ollama by default, Disabled, OpenAI-compatible API, Mock for testing
+- Translation backends: Ollama by default, Disabled, OpenAI-compatible API
 - Realtime pinned subtitle display plus UTF-8 `subtitle.txt`
 - Config persistence with corrupted-config recovery
 - Windows packaging script using PyInstaller
@@ -58,6 +59,14 @@ python -m realtime_subtitle.main
 
 The first ASR run may download the selected faster-whisper model. Models are cached by the faster-whisper/Hugging Face stack and are not bundled into the exe by default.
 
+Optional ASR engines need extra dependencies:
+
+```powershell
+pip install -r requirements-asr.txt
+```
+
+Then open Advanced settings, choose an ASR engine, and click `Download ASR model`. The app shows download progress and stores models under `models/asr/`.
+
 ## Bilibili Live Companion Capture
 
 Recommended flow:
@@ -89,7 +98,6 @@ Whisper/faster-whisper is used only for speech-to-text. Arbitrary language trans
 
 Backends:
 
-- `Mock`: testing only, no real translation
 - `Ollama`: local HTTP API, default model field is `qwen2.5:3b`
 - `OpenAI-compatible API`: any `/v1/chat/completions` compatible endpoint
 
@@ -101,6 +109,8 @@ For Cantonese to natural Simplified Mandarin, use:
 - Translator backend: `Ollama` or `OpenAI-compatible API`
 
 Do not use Mock for real translation.
+
+Mock is an internal test translator. It does not translate; it only helps developers test whether the subtitle pipeline is connected.
 
 ## Ollama Default
 

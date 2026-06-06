@@ -7,18 +7,10 @@ from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
-from faster_whisper import WhisperModel
 
+from .asr_backends import FasterWhisperBackend, FunAsrBackend, Qwen3AsrBackend
 from .audio_capture import AudioChunk
 from .translator import BaseTranslator, TranslationRequest
-
-
-LANGUAGE_MAP = {
-    "auto": None,
-    "yue": "zh",
-    "zh": "zh",
-    "en": "en",
-}
 
 
 @dataclass(frozen=True)
@@ -28,12 +20,14 @@ class AsrSettings:
     compute_type: str = "int8"
     source_language: str = "auto"
     target_language: str = "zh_hans"
-    display_mode: str = "original"
+    display_mode: str = "translation"
     accuracy_mode: str = "balanced"
     beam_size: int = 5
     vad_filter: bool = True
     no_speech_threshold: float = 0.6
     condition_on_previous_text: bool = False
+    asr_backend: str = "faster_whisper"
+    asr_model_key: str = "faster_whisper_small"
 
 
 class AsrWorker:
@@ -52,7 +46,7 @@ class AsrWorker:
         self.on_status = on_status
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._model: WhisperModel | None = None
+        self._backend = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -68,12 +62,8 @@ class AsrWorker:
 
     def _run(self) -> None:
         try:
-            self.on_status(f"loading: {self.settings.model_size} on {self.settings.device}/{self.settings.compute_type}")
-            self._model = WhisperModel(
-                self.settings.model_size,
-                device=self.settings.device,
-                compute_type=self.settings.compute_type,
-            )
+            self.on_status(f"loading: {self.settings.asr_model_key}")
+            self._backend = self._create_backend()
             self.on_status("listening")
             while not self._stop_event.is_set():
                 try:
@@ -95,21 +85,25 @@ class AsrWorker:
         except Exception as exc:
             self.on_status(f"error: {exc}")
 
-    def _transcribe(self, audio: np.ndarray) -> str:
-        if self._model is None:
-            return ""
-        language = LANGUAGE_MAP.get(self.settings.source_language)
-        segments, _info = self._model.transcribe(
-            audio,
-            language=language,
+    def _create_backend(self):
+        if self.settings.asr_backend == "funasr":
+            return FunAsrBackend(self.settings.asr_model_key, self.settings.device)
+        if self.settings.asr_backend == "qwen3_asr":
+            return Qwen3AsrBackend(self.settings.asr_model_key, self.settings.device)
+        return FasterWhisperBackend(
+            model_size=self.settings.model_size,
+            device=self.settings.device,
+            compute_type=self.settings.compute_type,
             beam_size=self.settings.beam_size,
             vad_filter=self.settings.vad_filter,
             no_speech_threshold=self.settings.no_speech_threshold,
             condition_on_previous_text=self.settings.condition_on_previous_text,
-            without_timestamps=True,
         )
-        text = "".join(segment.text for segment in segments).strip()
-        return text
+
+    def _transcribe(self, audio: np.ndarray) -> str:
+        if self._backend is None:
+            return ""
+        return self._backend.transcribe(audio, self.settings.source_language)
 
     def _translate(self, text: str) -> str:
         if self.settings.display_mode == "original" or getattr(self.translator, "disabled", False):
