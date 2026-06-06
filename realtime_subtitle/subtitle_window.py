@@ -23,6 +23,7 @@ class SubtitleWindow(QWidget):
         self._show_border = bool(config.get("show_border", False))
         self._pinned = bool(config.get("pinned", True))
         self._background_color = str(config.get("background_color", "#000000"))
+        self._background_alpha = int(max(80, min(255, float(config.get("opacity", 0.82)) * 255)))
         self._font_color = str(config.get("font_color", "#ffffff"))
         self._font_size = self._clamp_font_size(config.get("font_size", 32))
         self._font_colors = ["#ffffff", "#ffe066", "#66e3ff", "#8cff8c", "#ff9bd2", "#ff6b6b"]
@@ -42,7 +43,8 @@ class SubtitleWindow(QWidget):
 
         self.setWindowTitle("Caption Translator Subtitle")
         self.setMinimumSize(320, 72)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
 
@@ -118,6 +120,9 @@ class SubtitleWindow(QWidget):
     def set_font_size(self, size: int) -> None:
         self._font_size = self._clamp_font_size(size)
         self._apply_label_font(self.label.font().family())
+        self.label.updateGeometry()
+        self.label.repaint()
+        self._update_toolbar()
         if self._on_font_size_change:
             self._on_font_size_change(self._font_size)
 
@@ -135,7 +140,9 @@ class SubtitleWindow(QWidget):
         return self._font_color
 
     def set_opacity(self, opacity: float) -> None:
-        self.setWindowOpacity(max(0.2, min(1.0, opacity)))
+        self._background_alpha = int(max(80, min(255, opacity * 255)))
+        self.setWindowOpacity(1.0)
+        self.apply_style()
 
     def set_background_color(self, color: str) -> None:
         self._background_color = color
@@ -195,6 +202,15 @@ class SubtitleWindow(QWidget):
         if event.key() == Qt.Key.Key_Escape:
             event.ignore()
             return
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+                self.set_font_size(self._font_size + 2)
+                event.accept()
+                return
+            if event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
+                self.set_font_size(self._font_size - 2)
+                event.accept()
+                return
         super().keyPressEvent(event)
 
     def enterEvent(self, event) -> None:  # type: ignore[override]
@@ -216,7 +232,7 @@ class SubtitleWindow(QWidget):
         self.setStyleSheet(
             f"""
             QWidget {{
-                background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, 190);
+                background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {self._background_alpha});
                 border: {border};
             }}
             QLabel {{
@@ -244,7 +260,7 @@ class SubtitleWindow(QWidget):
                 background-color: rgba(90, 167, 255, 190);
             }}
             QSizeGrip {{
-                background: transparent;
+                background: rgba(255, 255, 255, 80);
                 width: 18px;
                 height: 18px;
                 border: 0;
@@ -279,6 +295,8 @@ class SubtitleWindow(QWidget):
         self.font_color_button.setStyleSheet(
             f"color: rgb({color.red()}, {color.green()}, {color.blue()}); font-weight: bold;"
         )
+        self.font_down_button.setToolTip(f"Font size: {self._font_size}")
+        self.font_up_button.setToolTip(f"Font size: {self._font_size}")
 
     def _cycle_font_color(self) -> None:
         current = self._font_color.lower()
@@ -316,6 +334,8 @@ class SubtitleWindow(QWidget):
     def _show_context_menu(self, point: QPoint) -> None:
         menu = QMenu(self)
         hide_action = menu.addAction(self._menu_labels["hide"])
+        bigger_action = menu.addAction("Font +")
+        smaller_action = menu.addAction("Font -")
         border_action = menu.addAction(self._menu_labels["show_border"])
         border_action.setCheckable(True)
         border_action.setChecked(self._show_border)
@@ -323,13 +343,17 @@ class SubtitleWindow(QWidget):
         action = menu.exec(self.mapToGlobal(point))
         if action == hide_action:
             self.hide()
+        elif action == bigger_action:
+            self.set_font_size(self._font_size + 2)
+        elif action == smaller_action:
+            self.set_font_size(self._font_size - 2)
         elif action == border_action:
             self.set_border_visible(not self._show_border)
         elif action == close_action and self._on_close_app:
             self._on_close_app()
 
     def _apply_flags(self) -> None:
-        flags = Qt.WindowType.Tool
+        flags = Qt.WindowType.Window
         if self._pinned:
             flags |= Qt.WindowType.WindowStaysOnTopHint
         if not self._show_border:
