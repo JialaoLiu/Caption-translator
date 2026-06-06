@@ -352,6 +352,7 @@ class ControlWindow(QMainWindow):
             system_device_index=self.system_combo.currentData(),
             audio_mode=str(self.audio_mode_combo.currentData()),
             chunk_seconds=self.chunk_spin.value(),
+            on_status=lambda status: self.signals.status_ready.emit(status),
         )
         translator = create_translator(config)
         if getattr(translator, "disabled", False):
@@ -460,6 +461,12 @@ class ControlWindow(QMainWindow):
         }
         if status.startswith("error:"):
             text = f"{tr(self.lang, 'status')}: {tr(self.lang, 'error')} - {status[6:].strip()}"
+        elif status.startswith("audio_error:"):
+            text = f"{tr(self.lang, 'status')}: {tr(self.lang, 'error')} - {status[12:].strip()}"
+        elif status.startswith("audio_warning:"):
+            text = f"{tr(self.lang, 'status')}: {status}"
+        elif status.startswith("audio:"):
+            text = f"{tr(self.lang, 'status')}: {status[6:].strip()}"
         elif status.startswith("loading:"):
             text = f"{tr(self.lang, 'status')}: {status}"
         else:
