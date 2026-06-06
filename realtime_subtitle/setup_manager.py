@@ -21,6 +21,7 @@ def prepare_first_run(
     ollama_model: str,
     progress: Callable[[int, str], None],
 ) -> None:
+    progress(1, "Starting first-run setup...")
     if not is_model_downloaded(asr_model_key):
         progress(5, "Downloading ASR model...")
         download_asr_model(asr_model_key, lambda value, message: progress(min(55, value // 2), message))

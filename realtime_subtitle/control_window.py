@@ -187,10 +187,6 @@ class ControlWindow(QMainWindow):
         self.download_asr_button = QPushButton()
         self.download_asr_button.clicked.connect(self._download_selected_asr_model)
         advanced_form.addRow(self._label("download_asr_model"), self.download_asr_button)
-        self.download_progress = QProgressBar()
-        self.download_progress.setRange(0, 100)
-        self.download_progress.setValue(0)
-        advanced_form.addRow(self._label("download_progress"), self.download_progress)
         self.device_combo = NoWheelComboBox()
         self.device_combo.addItems(["cpu", "cuda"])
         advanced_form.addRow(self._label("device"), self.device_combo)
@@ -233,9 +229,13 @@ class ControlWindow(QMainWindow):
         self.hint_label = QLabel()
         self.hint_label.setObjectName("hintLabel")
         self.hint_label.setWordWrap(True)
+        self.download_progress = QProgressBar()
+        self.download_progress.setRange(0, 100)
+        self.download_progress.setValue(0)
         self.status_label = QLabel()
         self.status_label.setObjectName("statusLabel")
         main_layout.addWidget(self.hint_label)
+        main_layout.addWidget(self.download_progress)
         main_layout.addWidget(self.status_label)
 
         buttons = QHBoxLayout()
@@ -572,6 +572,9 @@ class ControlWindow(QMainWindow):
         self.prepare_button.setEnabled(False)
         self.download_asr_button.setEnabled(False)
         self.download_progress.setValue(0)
+        message = tr(self.lang, "preparing_first_run")
+        self.hint_label.setText(message)
+        self.status_label.setText(f"{tr(self.lang, 'status')}: {message}")
         config = self._collect_config()
         asr_key = str(self.asr_model_combo.currentData())
         ollama = config.get("ollama", {})
@@ -602,7 +605,10 @@ class ControlWindow(QMainWindow):
     def _download_done(self, status: str) -> None:
         self._update_asr_download_state()
         self.prepare_button.setEnabled(True)
-        if status != "ok":
+        if status == "ok":
+            self.hint_label.setText(tr(self.lang, "setup_complete"))
+            self.status_label.setText(f"{tr(self.lang, 'status')}: {tr(self.lang, 'setup_complete')}")
+        else:
             self.hint_label.setText(status)
 
     def _drain_audio_queue(self) -> None:
