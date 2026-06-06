@@ -36,7 +36,7 @@ ASR_MODELS: dict[str, AsrModelInfo] = {
     ),
     "sensevoice_small": AsrModelInfo(
         key="sensevoice_small",
-        label="SenseVoiceSmall",
+        label="SenseVoiceSmall 234M (default)",
         backend="funasr",
         repo_id="iic/SenseVoiceSmall",
         source="modelscope",

@@ -10,8 +10,8 @@ GitHub 仓库：[JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Capt
 - 独立置顶字幕窗口，适合直播姬“窗口捕捉”或“截屏捕捉”
 - 音频模式：Mic only / System only / Mic + System
 - Windows WASAPI loopback 捕捉电脑声音
-- 默认 ASR：faster-whisper small
-- 可选 ASR 引擎：Fun-ASR-Nano、SenseVoiceSmall、Qwen3-ASR-0.6B、Qwen3-ASR-1.7B
+- 默认 ASR：SenseVoiceSmall 234M
+- 可选 ASR 引擎：Qwen3-ASR-0.6B、Qwen3-ASR-1.7B、Fun-ASR-Nano
 - 默认翻译后端：Ollama
 - 备用翻译后端：Disabled、OpenAI-compatible API
 - 默认配置：auto 源语言、简体普通话目标语言、只显示译文、CPU int8
@@ -38,6 +38,8 @@ pip install -r requirements-asr.txt
 ```text
 models/asr/
 ```
+
+默认推荐模型是 SenseVoiceSmall 234M。
 
 ## Mock 是什么
 

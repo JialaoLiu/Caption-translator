@@ -167,7 +167,8 @@ class ControlWindow(QMainWindow):
         self.model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
         advanced_form.addRow(self._label("asr_model"), self.model_combo)
         self.asr_model_combo = NoWheelComboBox()
-        for info in ASR_MODELS.values():
+        for key in ("sensevoice_small", "qwen3_asr_0_6b", "qwen3_asr_1_7b", "fun_asr_nano"):
+            info = ASR_MODELS[key]
             self.asr_model_combo.addItem(info.label, info.key)
         self.asr_model_combo.currentIndexChanged.connect(self._update_asr_download_state)
         advanced_form.addRow(self._label("asr_engine"), self.asr_model_combo)
@@ -258,7 +259,7 @@ class ControlWindow(QMainWindow):
         self._set_combo_data(self.display_combo, self.config.get("display_mode", "translation"))
         self._set_combo_data(self.translator_combo, self.config.get("translator_backend", "ollama"))
         self._set_combo_text(self.model_combo, self.config.get("model_size", "small"))
-        self._set_combo_data(self.asr_model_combo, self.config.get("asr_model_key", "faster_whisper_small"))
+        self._set_combo_data(self.asr_model_combo, self.config.get("asr_model_key", "sensevoice_small"))
         self._set_combo_text(self.device_combo, self.config.get("device", "cpu"))
         self._set_combo_text(self.compute_combo, self.config.get("compute_type", "int8"))
         self._set_combo_data(self.accuracy_combo, self.config.get("accuracy_mode", "balanced"))
@@ -343,6 +344,13 @@ class ControlWindow(QMainWindow):
     def start(self) -> None:
         config = self._collect_config()
         save_config(config)
+        asr_key = str(self.asr_model_combo.currentData())
+        asr_info = ASR_MODELS[asr_key]
+        if asr_info.source != "builtin" and not is_model_downloaded(asr_key):
+            message = f"{tr(self.lang, 'download_asr_first')} {asr_info.label}"
+            self.hint_label.setText(message)
+            self._set_download_progress(0, message)
+            return
         self._drain_audio_queue()
         self.output = SubtitleTextOutput(subtitle_output_path(config))
         self.output.write("")

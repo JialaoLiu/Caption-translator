@@ -13,8 +13,8 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - Microphone input device selection
 - Audio modes: Mic only, System only, Mic + System
 - Windows WASAPI loopback for system audio capture
-- faster-whisper ASR
-- Optional ASR engines: Fun-ASR-Nano, SenseVoiceSmall, Qwen3-ASR-0.6B, Qwen3-ASR-1.7B
+- Default ASR: SenseVoiceSmall 234M
+- Optional ASR engines: Qwen3-ASR-0.6B, Qwen3-ASR-1.7B, Fun-ASR-Nano
 - Model switching: `tiny`, `base`, `small`, `medium`, `large-v3`
 - Runtime device selection: `cpu` or `cuda`
 - Compute type selection: `int8`, `float16`, `float32`
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 python -m realtime_subtitle.main
 ```
 
-The first ASR run may download the selected faster-whisper model. Models are cached by the faster-whisper/Hugging Face stack and are not bundled into the exe by default.
+The first ASR run may need the selected ASR model. Models are not bundled into the exe by default.
 
 Optional ASR engines need extra dependencies:
 
@@ -65,7 +65,7 @@ Optional ASR engines need extra dependencies:
 pip install -r requirements-asr.txt
 ```
 
-Then open Advanced settings, choose an ASR engine, and click `Download ASR model`. The app shows download progress and stores models under `models/asr/`.
+Then open Advanced settings, choose an ASR engine, and click `Download ASR model`. The app shows download progress and stores models under `models/asr/`. The default recommended model is SenseVoiceSmall.
 
 ## Bilibili Live Companion Capture
 
