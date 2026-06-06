@@ -32,6 +32,7 @@ from .audio_capture import AudioCapture, list_input_devices, list_system_output_
 from .i18n import tr
 from .modern_ui import apply_modern_theme
 from .obs_output import SubtitleTextOutput
+from .setup_manager import prepare_first_run
 from .subtitle_window import SubtitleWindow
 from .translator import check_ollama_model, create_translator
 
@@ -165,6 +166,9 @@ class ControlWindow(QMainWindow):
         self.ollama_model_combo.addItems(["qwen2.5:3b", "qwen3:4b"])
         self.ollama_model_combo.currentTextChanged.connect(self._check_ollama_status)
         quick_form.addRow(self._label("ollama_model"), self.ollama_model_combo)
+        self.prepare_button = QPushButton()
+        self.prepare_button.clicked.connect(self._prepare_first_run)
+        quick_form.addRow(self._label("prepare_first_run"), self.prepare_button)
         main_layout.addWidget(self.quick_group)
 
         self.advanced_group = QGroupBox()
@@ -522,6 +526,7 @@ class ControlWindow(QMainWindow):
         self.start_button.setText(tr(self.lang, "start"))
         self.stop_button.setText(tr(self.lang, "stop"))
         self.exit_button.setText(tr(self.lang, "exit"))
+        self.prepare_button.setText(tr(self.lang, "prepare_first_run"))
         self.download_asr_button.setText(tr(self.lang, "download_asr_model"))
         self.mic_combo.setItemText(0, tr(self.lang, "default_input"))
         self.system_combo.setItemText(0, tr(self.lang, "default_system_output"))
@@ -563,12 +568,40 @@ class ControlWindow(QMainWindow):
         self._download_thread = threading.Thread(target=worker, name="asr-model-download", daemon=True)
         self._download_thread.start()
 
+    def _prepare_first_run(self) -> None:
+        self.prepare_button.setEnabled(False)
+        self.download_asr_button.setEnabled(False)
+        self.download_progress.setValue(0)
+        config = self._collect_config()
+        asr_key = str(self.asr_model_combo.currentData())
+        ollama = config.get("ollama", {})
+        base_url = str(ollama.get("base_url", "http://127.0.0.1:11434"))
+        model = str(ollama.get("model", "qwen2.5:3b"))
+
+        def worker() -> None:
+            try:
+                prepare_first_run(
+                    asr_model_key=asr_key,
+                    ollama_base_url=base_url,
+                    ollama_model=model,
+                    progress=lambda value, message: self.signals.download_progress.emit(value, message),
+                )
+                self.signals.download_done.emit("ok")
+            except Exception as exc:
+                self.signals.download_done.emit(f"error: {exc}")
+
+        import threading
+
+        self._download_thread = threading.Thread(target=worker, name="first-run-setup", daemon=True)
+        self._download_thread.start()
+
     def _set_download_progress(self, value: int, message: str) -> None:
         self.download_progress.setValue(value)
         self.hint_label.setText(message)
 
     def _download_done(self, status: str) -> None:
         self._update_asr_download_state()
+        self.prepare_button.setEnabled(True)
         if status != "ok":
             self.hint_label.setText(status)
 
