@@ -63,15 +63,15 @@ ASR_MODELS: dict[str, AsrModelInfo] = {
     ),
     "funasr_server": AsrModelInfo(
         key="funasr_server",
-        label="FunASR/vLLM OpenAI-compatible ASR server",
+        label="Fun-ASR-Nano local vLLM/FunASR service",
         backend="openai_asr_api",
-        repo_id="fun-asr-nano",
+        repo_id="FunAudioLLM/Fun-ASR-Nano-2512",
         source="server",
         local_dir_name="server",
     ),
     "qwen3_vllm_server": AsrModelInfo(
         key="qwen3_vllm_server",
-        label="Qwen3-ASR vLLM server",
+        label="Qwen3-ASR local vLLM service",
         backend="openai_asr_api",
         repo_id="Qwen/Qwen3-ASR-1.7B",
         source="server",

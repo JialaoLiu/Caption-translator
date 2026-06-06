@@ -14,7 +14,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - Audio modes: Mic only, System only, Mic + System
 - Windows WASAPI loopback for system audio capture
 - Default ASR: SenseVoiceSmall 234M
-- Optional ASR engines: Qwen3-ASR-0.6B, Qwen3-ASR-1.7B, Fun-ASR-Nano, OpenAI-compatible ASR server mode for vLLM/FunASR
+- Optional ASR engines: Qwen3-ASR-0.6B, Qwen3-ASR-1.7B, Fun-ASR-Nano, local vLLM/FunASR service presets
 - Model switching: `tiny`, `base`, `small`, `medium`, `large-v3`
 - Runtime device selection: `cpu` or `cuda`
 - Compute type selection: `int8`, `float16`, `float32`
@@ -23,7 +23,7 @@ Repository: [JialaoLiu/Caption-translator](https://github.com/JialaoLiu/Caption-
 - App language switch: English / Simplified Chinese
 - Accuracy mode: low latency, balanced, accuracy first
 - Display modes: original, translation, bilingual
-- Translation backends: Ollama by default, Disabled, OpenAI-compatible API
+- Translation backends: Ollama by default, Disabled for original-only subtitles
 - Realtime pinned subtitle display plus UTF-8 `subtitle.txt`
 - Config persistence with corrupted-config recovery
 - Windows packaging script using PyInstaller
@@ -67,9 +67,9 @@ pip install -r requirements-asr.txt
 
 Then open Advanced settings, choose an ASR engine, and click `Download ASR model`. The app shows download progress and stores models under `models/asr/`. The default recommended model is SenseVoiceSmall.
 
-## Optional vLLM / FunASR Server ASR
+## Optional Local vLLM / FunASR ASR
 
-For high-accuracy or GPU-heavy ASR, run the model as an OpenAI-compatible transcription service and let Caption translator connect to it. This keeps the normal Windows app lightweight and avoids bundling vLLM into the exe.
+For high-accuracy or GPU-heavy ASR, run the model as a local offline vLLM/FunASR service and let Caption translator connect to it automatically through the preset. This keeps the normal Windows app lightweight and avoids bundling vLLM into the exe.
 
 Qwen3-ASR via vLLM:
 
@@ -77,12 +77,7 @@ Qwen3-ASR via vLLM:
 vllm serve Qwen/Qwen3-ASR-1.7B
 ```
 
-Then choose `Qwen3-ASR vLLM server` in Advanced settings:
-
-```text
-ASR server URL: http://127.0.0.1:8000/v1
-ASR server model: Qwen/Qwen3-ASR-1.7B
-```
+Then choose `Qwen3-ASR local vLLM service` in Advanced settings.
 
 FunASR OpenAI-compatible server:
 
@@ -90,14 +85,9 @@ FunASR OpenAI-compatible server:
 funasr-server --model sensevoice --device cuda
 ```
 
-Then choose `FunASR/vLLM OpenAI-compatible ASR server`:
+Then choose `Fun-ASR-Nano local vLLM/FunASR service`.
 
-```text
-ASR server URL: http://127.0.0.1:8000/v1
-ASR server model: sensevoice
-```
-
-Server ASR mode does not download local ASR weights inside the app. The server owns model loading and GPU/CPU resource usage.
+Local service ASR mode does not download local ASR weights inside the app. The local vLLM/FunASR service owns model loading and GPU/CPU resource usage.
 
 ## Bilibili Live Companion Capture
 
@@ -131,14 +121,14 @@ Whisper/faster-whisper is used only for speech-to-text. Arbitrary language trans
 Backends:
 
 - `Ollama`: local HTTP API, default model field is `qwen2.5:3b`
-- `OpenAI-compatible API`: any `/v1/chat/completions` compatible endpoint
+- `Disabled`: original subtitles only, no translation
 
 For Cantonese to natural Simplified Mandarin, use:
 
 - Source language: `Cantonese / 粤语`
 - Target language: `Mandarin Simplified / 简体普通话`
 - Display mode: `Translation only` or `Bilingual`
-- Translator backend: `Ollama` or `OpenAI-compatible API`
+- Translator backend: `Ollama`
 
 Do not use Mock for real translation.
 
@@ -170,7 +160,7 @@ ollama pull qwen2.5:3b
 
 Mic + System is the default. The app does not assume WASAPI loopback includes microphone audio.
 
-API keys are entered in the GUI/config by the user. Do not commit private keys to GitHub.
+Private API keys should not be committed to GitHub. The normal UI currently avoids API-key fields.
 
 ## Build Windows exe
 

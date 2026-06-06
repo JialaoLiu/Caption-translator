@@ -44,7 +44,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "asr_api": {
         "base_url": "http://127.0.0.1:8000/v1",
         "api_key": "",
-        "model": "sensevoice",
+        "model": "FunAudioLLM/Fun-ASR-Nano-2512",
     },
     "chunk_seconds": 3.0,
     "font_size": 32,

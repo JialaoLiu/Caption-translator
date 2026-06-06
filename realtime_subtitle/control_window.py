@@ -156,7 +156,6 @@ class ControlWindow(QMainWindow):
         self.translator_combo = NoWheelComboBox()
         self.translator_combo.addItem("Ollama / 本地真实翻译", "ollama")
         self.translator_combo.addItem("Disabled / 禁用翻译", "disabled")
-        self.translator_combo.addItem("OpenAI-compatible / API 翻译", "openai_compatible")
         self.translator_combo.currentIndexChanged.connect(self._update_translator_fields)
         self.translator_combo.currentIndexChanged.connect(self._check_ollama_status)
         quick_form.addRow(self._label("backend"), self.translator_combo)
@@ -196,9 +195,6 @@ class ControlWindow(QMainWindow):
         self.asr_api_key_edit = QLineEdit()
         self.asr_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.asr_api_model_edit = QLineEdit()
-        advanced_form.addRow(self._label("asr_api_url"), self.asr_api_url_edit)
-        advanced_form.addRow(self._label("asr_api_key"), self.asr_api_key_edit)
-        advanced_form.addRow(self._label("asr_api_model"), self.asr_api_model_edit)
         self.download_asr_button = QPushButton()
         self.download_asr_button.clicked.connect(self._download_selected_asr_model)
         advanced_form.addRow(self._label("download_asr_model"), self.download_asr_button)
@@ -236,9 +232,6 @@ class ControlWindow(QMainWindow):
         self.openai_key_edit = QLineEdit()
         self.openai_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.openai_model_edit = QLineEdit()
-        advanced_form.addRow(self._label("api_url"), self.openai_url_edit)
-        advanced_form.addRow(self._label("api_key"), self.openai_key_edit)
-        advanced_form.addRow(self._label("api_model"), self.openai_model_edit)
         main_layout.addWidget(self.advanced_group)
 
         self.hint_label = QLabel()
@@ -302,10 +295,9 @@ class ControlWindow(QMainWindow):
         self.openai_url_edit.setText(str(openai_config.get("base_url", "http://127.0.0.1:8000/v1")))
         self.openai_key_edit.setText(str(openai_config.get("api_key", "")))
         self.openai_model_edit.setText(str(openai_config.get("model", "qwen2.5-3b")))
-        asr_api_config = self.config.get("asr_api", {})
-        self.asr_api_url_edit.setText(str(asr_api_config.get("base_url", "http://127.0.0.1:8000/v1")))
-        self.asr_api_key_edit.setText(str(asr_api_config.get("api_key", "")))
-        self.asr_api_model_edit.setText(str(asr_api_config.get("model", "sensevoice")))
+        self.asr_api_url_edit.setText(self._default_asr_server_url())
+        self.asr_api_key_edit.setText("")
+        self.asr_api_model_edit.setText(self._default_asr_server_model())
         self._update_translator_fields()
         self._set_status("idle")
 
@@ -351,9 +343,9 @@ class ControlWindow(QMainWindow):
                     "model": self.openai_model_edit.text().strip(),
                 },
                 "asr_api": {
-                    "base_url": self.asr_api_url_edit.text().strip() or "http://127.0.0.1:8000/v1",
-                    "api_key": self.asr_api_key_edit.text().strip(),
-                    "model": self.asr_api_model_edit.text().strip() or self._default_asr_server_model(),
+                    "base_url": self._default_asr_server_url(),
+                    "api_key": "",
+                    "model": self._default_asr_server_model(),
                 },
                 "subtitle_window": self.subtitle_window.state(),
                 "font_size": self.subtitle_window.label.font().pointSize(),
@@ -377,9 +369,9 @@ class ControlWindow(QMainWindow):
             vad_filter=self.vad_check.isChecked(),
             no_speech_threshold=self.no_speech_spin.value(),
             condition_on_previous_text=self.condition_check.isChecked(),
-            asr_api_base_url=self.asr_api_url_edit.text().strip() or "http://127.0.0.1:8000/v1",
-            asr_api_key=self.asr_api_key_edit.text().strip(),
-            asr_api_model=self.asr_api_model_edit.text().strip() or self._default_asr_server_model(),
+            asr_api_base_url=self._default_asr_server_url(),
+            asr_api_key="",
+            asr_api_model=self._default_asr_server_model(),
         )
 
     def start(self) -> None:
@@ -491,9 +483,6 @@ class ControlWindow(QMainWindow):
         running = self.asr_worker is not None
         self.ollama_model_combo.setEnabled(backend == "ollama" and not running)
         self.ollama_url_edit.setEnabled(backend == "ollama" and not running)
-        self.openai_url_edit.setEnabled(backend == "openai_compatible" and not running)
-        self.openai_key_edit.setEnabled(backend == "openai_compatible" and not running)
-        self.openai_model_edit.setEnabled(backend == "openai_compatible" and not running)
 
     def _check_ollama_status(self) -> None:
         if str(self.translator_combo.currentData()) != "ollama":
@@ -597,8 +586,11 @@ class ControlWindow(QMainWindow):
         if key == "qwen3_vllm_server":
             return "Qwen/Qwen3-ASR-1.7B"
         if key == "funasr_server":
-            return "sensevoice"
+            return "FunAudioLLM/Fun-ASR-Nano-2512"
         return "sensevoice"
+
+    def _default_asr_server_url(self) -> str:
+        return "http://127.0.0.1:8000/v1"
 
     def _download_selected_asr_model(self) -> None:
         key = str(self.asr_model_combo.currentData())

@@ -56,6 +56,6 @@ Bilibili 直播姬
 - Source Language：`Cantonese / 粤语`
 - Target Language：`Mandarin Simplified / 简体普通话`
 - Display Mode：`Translation only` 或 `Bilingual`
-- Translator Backend：`Ollama` 或 `OpenAI-compatible API`
+- Translator Backend：`Ollama`，如果只需要原文字幕就选 `Disabled`
 
 不要使用 Mock 做真实直播翻译。Mock 只用于确认字幕流程是否跑通。

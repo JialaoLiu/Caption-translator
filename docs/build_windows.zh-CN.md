@@ -40,7 +40,7 @@ dist/CaptionTranslator.exe
 
 ## API key
 
-OpenAI-compatible API key 由用户在 GUI 中填写。不要写死在代码里，不要提交到 GitHub。
+当前普通 GUI 不要求用户填写 API key。未来如果重新加入云端或 OpenAI-compatible 翻译后端，API key 只能由用户本地配置，不要写死在代码里，不要提交到 GitHub。
 
 ## 常见问题
 
