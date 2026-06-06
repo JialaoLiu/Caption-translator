@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -86,10 +88,13 @@ def is_model_downloaded(model_key: str) -> bool:
 def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> Path:
     info = ASR_MODELS[model_key]
     target = model_local_dir(model_key)
+    if target.exists() and not is_model_downloaded(model_key):
+        shutil.rmtree(target, ignore_errors=True)
     target.mkdir(parents=True, exist_ok=True)
     if info.source == "builtin":
         progress(100, "faster-whisper downloads automatically on first use.")
         return target
+    ensure_asr_dependencies(model_key, progress)
     progress(5, f"Preparing {info.label}...")
     if info.source == "huggingface":
         try:
@@ -117,3 +122,44 @@ def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> 
         raise RuntimeError(f"Model download did not produce usable files: {info.label}")
     progress(100, f"Downloaded {info.label}.")
     return target
+
+
+def ensure_asr_dependencies(model_key: str, progress: Callable[[int, str], None]) -> None:
+    info = ASR_MODELS[model_key]
+    if info.backend == "funasr":
+        ensure_python_modules(
+            imports=["funasr", "modelscope", "soundfile"],
+            packages=["funasr>=1.2.7", "modelscope>=1.20", "soundfile>=0.12"],
+            progress=progress,
+        )
+    elif info.backend == "qwen3_asr":
+        ensure_python_modules(
+            imports=["qwen_asr", "huggingface_hub", "torch"],
+            packages=["qwen-asr", "huggingface_hub>=0.24", "torch"],
+            progress=progress,
+        )
+
+
+def ensure_python_modules(imports: list[str], packages: list[str], progress: Callable[[int, str], None]) -> None:
+    missing = []
+    for module in imports:
+        try:
+            __import__(module)
+        except Exception:
+            missing.append(module)
+    if not missing:
+        progress(8, "ASR dependencies are ready.")
+        return
+    progress(8, f"Installing ASR dependencies: {', '.join(packages)}")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", *packages],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=900,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout.strip() or "Failed to install ASR dependencies.")
+    progress(12, "ASR dependencies installed.")
