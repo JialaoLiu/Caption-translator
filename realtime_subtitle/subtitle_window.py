@@ -24,6 +24,7 @@ class SubtitleWindow(QWidget):
         self._pinned = bool(config.get("pinned", True))
         self._background_color = str(config.get("background_color", "#000000"))
         self._font_color = str(config.get("font_color", "#ffffff"))
+        self._font_size = self._clamp_font_size(config.get("font_size", 32))
         self._font_colors = ["#ffffff", "#ffe066", "#66e3ff", "#8cff8c", "#ff9bd2", "#ff6b6b"]
         self._line_mode = str(config.get("line_mode", "auto"))
         self._max_chars = int(config.get("max_chars", 120))
@@ -48,12 +49,12 @@ class SubtitleWindow(QWidget):
         self.toolbar = QWidget(self)
         self.toolbar.setObjectName("subtitleToolbar")
         self.pin_button = QPushButton()
-        self.translation_button = QPushButton("译文")
-        self.bilingual_button = QPushButton("双语")
-        self.font_color_button = QPushButton("●")
+        self.translation_button = QPushButton("Trans")
+        self.bilingual_button = QPushButton("Both")
+        self.font_color_button = QPushButton("Color")
         self.font_down_button = QPushButton("A-")
         self.font_up_button = QPushButton("A+")
-        self.close_button = QPushButton("×")
+        self.close_button = QPushButton("X")
         for button in (
             self.pin_button,
             self.translation_button,
@@ -80,13 +81,7 @@ class SubtitleWindow(QWidget):
         self.label = QLabel("Waiting for speech...")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setWordWrap(self._word_wrap)
-        self.label.setFont(
-            QFont(
-                str(config.get("font_family", "Microsoft YaHei UI")),
-                int(config.get("font_size", 32)),
-                QFont.Weight.Bold,
-            )
-        )
+        self._apply_label_font(str(config.get("font_family", "Microsoft YaHei UI")))
 
         self.size_grip = QSizeGrip(self)
         layout = QVBoxLayout(self)
@@ -118,16 +113,16 @@ class SubtitleWindow(QWidget):
         self.label.setText(display or " ")
 
     def set_font_family(self, family: str) -> None:
-        font = self.label.font()
-        font.setFamily(family)
-        self.label.setFont(font)
+        self._apply_label_font(family)
 
     def set_font_size(self, size: int) -> None:
-        font = self.label.font()
-        font.setPointSize(max(16, min(96, size)))
-        self.label.setFont(font)
+        self._font_size = self._clamp_font_size(size)
+        self._apply_label_font(self.label.font().family())
         if self._on_font_size_change:
-            self._on_font_size_change(font.pointSize())
+            self._on_font_size_change(self._font_size)
+
+    def font_size(self) -> int:
+        return self._font_size
 
     def set_font_color(self, color: str) -> None:
         self._font_color = color
@@ -262,8 +257,8 @@ class SubtitleWindow(QWidget):
         self.translation_button.clicked.connect(lambda: self._change_display_mode("translation"))
         self.bilingual_button.clicked.connect(lambda: self._change_display_mode("bilingual"))
         self.font_color_button.clicked.connect(self._cycle_font_color)
-        self.font_up_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() + 2))
-        self.font_down_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() - 2))
+        self.font_down_button.clicked.connect(lambda: self.set_font_size(self._font_size - 2))
+        self.font_up_button.clicked.connect(lambda: self.set_font_size(self._font_size + 2))
         self.close_button.clicked.connect(lambda: self._on_close_app() if self._on_close_app else None)
 
     def _change_display_mode(self, mode: str) -> None:
@@ -282,7 +277,7 @@ class SubtitleWindow(QWidget):
         if not color.isValid():
             color = QColor("#ffffff")
         self.font_color_button.setStyleSheet(
-            f"color: rgb({color.red()}, {color.green()}, {color.blue()}); font-size: 16px; font-weight: bold;"
+            f"color: rgb({color.red()}, {color.green()}, {color.blue()}); font-weight: bold;"
         )
 
     def _cycle_font_color(self) -> None:
@@ -292,6 +287,17 @@ class SubtitleWindow(QWidget):
         except ValueError:
             index = -1
         self.set_font_color(self._font_colors[(index + 1) % len(self._font_colors)])
+
+    def _apply_label_font(self, family: str) -> None:
+        self.label.setFont(QFont(family, self._font_size, QFont.Weight.Bold))
+
+    @staticmethod
+    def _clamp_font_size(value: object) -> int:
+        try:
+            size = int(value)
+        except (TypeError, ValueError):
+            size = 32
+        return max(16, min(96, size))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

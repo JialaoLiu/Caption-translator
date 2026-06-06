@@ -349,7 +349,7 @@ class ControlWindow(QMainWindow):
                     "model": self._default_asr_server_model(),
                 },
                 "subtitle_window": self.subtitle_window.state(),
-                "font_size": self.subtitle_window.label.font().pointSize(),
+                "font_size": self.subtitle_window.font_size(),
                 "font_color": self.subtitle_window.font_color(),
                 "pinned": self.subtitle_window.is_pinned(),
             }
