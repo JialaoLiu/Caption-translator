@@ -77,6 +77,7 @@ class ControlWindow(QMainWindow):
             on_close_app=self.exit_app,
             on_display_mode_change=self._set_display_mode_from_subtitle,
             on_font_size_change=self._set_font_size_from_subtitle,
+            on_font_color_change=self._set_font_color_from_subtitle,
         )
         self.signals = UiSignals()
         self.signals.subtitle_ready.connect(self._handle_subtitle)
@@ -349,6 +350,7 @@ class ControlWindow(QMainWindow):
                 },
                 "subtitle_window": self.subtitle_window.state(),
                 "font_size": self.subtitle_window.label.font().pointSize(),
+                "font_color": self.subtitle_window.font_color(),
                 "pinned": self.subtitle_window.is_pinned(),
             }
         )
@@ -447,6 +449,9 @@ class ControlWindow(QMainWindow):
 
     def _set_font_size_from_subtitle(self, size: int) -> None:
         self.config["font_size"] = size
+
+    def _set_font_color_from_subtitle(self, color: str) -> None:
+        self.config["font_color"] = color
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         for control in (

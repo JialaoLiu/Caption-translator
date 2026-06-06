@@ -14,6 +14,7 @@ class SubtitleWindow(QWidget):
         on_close_app: Callable[[], None] | None = None,
         on_display_mode_change: Callable[[str], None] | None = None,
         on_font_size_change: Callable[[int], None] | None = None,
+        on_font_color_change: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         config = config or {}
@@ -23,6 +24,7 @@ class SubtitleWindow(QWidget):
         self._pinned = bool(config.get("pinned", True))
         self._background_color = str(config.get("background_color", "#000000"))
         self._font_color = str(config.get("font_color", "#ffffff"))
+        self._font_colors = ["#ffffff", "#ffe066", "#66e3ff", "#8cff8c", "#ff9bd2", "#ff6b6b"]
         self._line_mode = str(config.get("line_mode", "auto"))
         self._max_chars = int(config.get("max_chars", 120))
         self._word_wrap = bool(config.get("word_wrap", True))
@@ -30,6 +32,7 @@ class SubtitleWindow(QWidget):
         self._on_close_app = on_close_app
         self._on_display_mode_change = on_display_mode_change
         self._on_font_size_change = on_font_size_change
+        self._on_font_color_change = on_font_color_change
         self._menu_labels = {
             "hide": "Hide",
             "show_border": "Show Border",
@@ -47,15 +50,17 @@ class SubtitleWindow(QWidget):
         self.pin_button = QPushButton()
         self.translation_button = QPushButton("译文")
         self.bilingual_button = QPushButton("双语")
-        self.font_up_button = QPushButton("A+")
+        self.font_color_button = QPushButton("●")
         self.font_down_button = QPushButton("A-")
+        self.font_up_button = QPushButton("A+")
         self.close_button = QPushButton("×")
         for button in (
             self.pin_button,
             self.translation_button,
             self.bilingual_button,
-            self.font_up_button,
+            self.font_color_button,
             self.font_down_button,
+            self.font_up_button,
             self.close_button,
         ):
             button.setFixedHeight(26)
@@ -67,6 +72,7 @@ class SubtitleWindow(QWidget):
         toolbar_layout.addWidget(self.translation_button)
         toolbar_layout.addWidget(self.bilingual_button)
         toolbar_layout.addStretch(1)
+        toolbar_layout.addWidget(self.font_color_button)
         toolbar_layout.addWidget(self.font_down_button)
         toolbar_layout.addWidget(self.font_up_button)
         toolbar_layout.addWidget(self.close_button)
@@ -126,6 +132,12 @@ class SubtitleWindow(QWidget):
     def set_font_color(self, color: str) -> None:
         self._font_color = color
         self.apply_style()
+        self._update_toolbar()
+        if self._on_font_color_change:
+            self._on_font_color_change(self._font_color)
+
+    def font_color(self) -> str:
+        return self._font_color
 
     def set_opacity(self, opacity: float) -> None:
         self.setWindowOpacity(max(0.2, min(1.0, opacity)))
@@ -249,6 +261,7 @@ class SubtitleWindow(QWidget):
         self.pin_button.clicked.connect(lambda: self.set_pinned(not self._pinned))
         self.translation_button.clicked.connect(lambda: self._change_display_mode("translation"))
         self.bilingual_button.clicked.connect(lambda: self._change_display_mode("bilingual"))
+        self.font_color_button.clicked.connect(self._cycle_font_color)
         self.font_up_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() + 2))
         self.font_down_button.clicked.connect(lambda: self.set_font_size(self.label.font().pointSize() - 2))
         self.close_button.clicked.connect(lambda: self._on_close_app() if self._on_close_app else None)
@@ -265,6 +278,20 @@ class SubtitleWindow(QWidget):
         self.bilingual_button.setCheckable(True)
         self.translation_button.setChecked(self._display_mode == "translation")
         self.bilingual_button.setChecked(self._display_mode == "bilingual")
+        color = QColor(self._font_color)
+        if not color.isValid():
+            color = QColor("#ffffff")
+        self.font_color_button.setStyleSheet(
+            f"color: rgb({color.red()}, {color.green()}, {color.blue()}); font-size: 16px; font-weight: bold;"
+        )
+
+    def _cycle_font_color(self) -> None:
+        current = self._font_color.lower()
+        try:
+            index = self._font_colors.index(current)
+        except ValueError:
+            index = -1
+        self.set_font_color(self._font_colors[(index + 1) % len(self._font_colors)])
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
