@@ -24,7 +24,7 @@ def prepare_first_run(
     progress(1, "Starting first-run setup...")
     if not is_model_downloaded(asr_model_key):
         progress(5, "Downloading ASR model...")
-        download_asr_model(asr_model_key, lambda value, message: progress(min(55, value // 2), message))
+        download_asr_model(asr_model_key, lambda value, message: progress(max(5, min(55, value // 2)), message))
     else:
         progress(55, "ASR model already downloaded.")
 

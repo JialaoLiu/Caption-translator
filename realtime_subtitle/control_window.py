@@ -571,10 +571,9 @@ class ControlWindow(QMainWindow):
     def _prepare_first_run(self) -> None:
         self.prepare_button.setEnabled(False)
         self.download_asr_button.setEnabled(False)
-        self.download_progress.setValue(0)
         message = tr(self.lang, "preparing_first_run")
-        self.hint_label.setText(message)
-        self.status_label.setText(f"{tr(self.lang, 'status')}: {message}")
+        self._set_download_progress(1, message)
+        QApplication.processEvents()
         config = self._collect_config()
         asr_key = str(self.asr_model_combo.currentData())
         ollama = config.get("ollama", {})
@@ -583,6 +582,7 @@ class ControlWindow(QMainWindow):
 
         def worker() -> None:
             try:
+                self.signals.download_progress.emit(2, "First-run setup thread started...")
                 prepare_first_run(
                     asr_model_key=asr_key,
                     ollama_base_url=base_url,
@@ -599,8 +599,9 @@ class ControlWindow(QMainWindow):
         self._download_thread.start()
 
     def _set_download_progress(self, value: int, message: str) -> None:
-        self.download_progress.setValue(value)
+        self.download_progress.setValue(max(0, min(100, value)))
         self.hint_label.setText(message)
+        self.status_label.setText(f"{tr(self.lang, 'status')}: {message}")
 
     def _download_done(self, status: str) -> None:
         self._update_asr_download_state()

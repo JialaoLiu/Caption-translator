@@ -100,7 +100,7 @@ def download_asr_model(model_key: str, progress: Callable[[int, str], None]) -> 
             from modelscope import snapshot_download
         except Exception as exc:
             raise RuntimeError("Missing dependency: pip install modelscope") from exc
-        progress(15, f"Downloading {info.repo_id} from ModelScope...")
+        progress(20, f"Downloading {info.repo_id} from ModelScope. This can take a while...")
         snapshot_download(info.repo_id, local_dir=str(target))
     else:
         raise RuntimeError(f"Unsupported model source: {info.source}")
