@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Protocol
@@ -82,8 +83,8 @@ class FunAsrBackend:
                 return ""
             first = result[0]
             if isinstance(first, dict):
-                return str(first.get("text", "")).strip()
-            return str(first).strip()
+                return clean_asr_text(str(first.get("text", "")))
+            return clean_asr_text(str(first))
         finally:
             Path(wav_path).unlink(missing_ok=True)
 
@@ -110,7 +111,7 @@ class Qwen3AsrBackend:
         result = self.model.transcribe(audio=(audio, 16000), language=language)
         if not result:
             return ""
-        return str(getattr(result[0], "text", "")).strip()
+        return clean_asr_text(str(getattr(result[0], "text", "")))
 
 
 class OpenAICompatibleAsrBackend:
@@ -151,13 +152,13 @@ class OpenAICompatibleAsrBackend:
             if isinstance(data, dict):
                 text = data.get("text") or data.get("transcription")
                 if text is not None:
-                    return str(text).strip()
+                    return clean_asr_text(str(text))
                 choices = data.get("choices")
                 if isinstance(choices, list) and choices and isinstance(choices[0], dict):
                     message = choices[0].get("message", {})
                     if isinstance(message, dict) and message.get("content"):
-                        return str(message["content"]).strip()
-            return str(data).strip()
+                        return clean_asr_text(str(message["content"]))
+            return clean_asr_text(str(data))
         finally:
             Path(wav_path).unlink(missing_ok=True)
 
@@ -223,3 +224,9 @@ def build_multipart(fields: dict[str, str], file_field: str, filename: str, file
         ]
     )
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def clean_asr_text(text: str) -> str:
+    cleaned = re.sub(r"<\|[^|]+?\|>", "", text)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()

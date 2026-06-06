@@ -158,18 +158,18 @@ def build_translation_prompt(request: TranslationRequest) -> str:
             "Rules:\n"
             "- Output Simplified Chinese only.\n"
             "- If the source is Cantonese, convert the meaning and speaking style into natural Mandarin; do not merely convert Traditional to Simplified.\n"
-            "- Do not keep Cantonese particles or Cantonese sentence patterns, such as 咩, 咗, 冇, 唔, 嘅, 哋, 喎, 啫, 啱, 嚟, 吖, 啦.\n"
+            "- Do not keep Cantonese particles or Cantonese sentence patterns, such as 咩、喎、啫、噉、嘅、啦、喇、呀、啊、呢、唔、冇.\n"
             "- Keep it short and casual for realtime livestream subtitles.\n"
             "- Do not explain, label, quote, or add extra content.\n\n"
             "Examples:\n"
-            "Input: 你今日食咗飯未呀？\n"
-            "Output: 你今天吃饭了没有？\n"
-            "Input: 我哋等陣去邊度呀？\n"
-            "Output: 我们等一下去哪里？\n"
-            "Input: 佢啱啱同我講冇問題。\n"
-            "Output: 他刚刚跟我说没有问题。\n"
-            "Input: 唔該你幫我睇一睇。\n"
-            "Output: 麻烦你帮我看一下。\n\n"
+            "Input: 我今日冇食早餐\n"
+            "Output: 我今天没吃早饭\n"
+            "Input: 我哋等阵去边度\n"
+            "Output: 我们等一下去哪里\n"
+            "Input: 佢啱啱同我讲冇问题\n"
+            "Output: 他刚刚跟我说没问题\n"
+            "Input: 唔该你帮我睇一睇\n"
+            "Output: 麻烦你帮我看一下\n\n"
             f"Input: {text}\n"
             "Output:"
         )
@@ -194,27 +194,31 @@ def build_translation_prompt(request: TranslationRequest) -> str:
 
 def http_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float) -> dict[str, Any]:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         message = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Translation API HTTP {exc.code}: {message}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError("Translation API timeout") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Translation API unavailable: {exc.reason}") from exc
 
 
 def http_get_json(url: str, timeout: float = 3.0) -> dict[str, Any]:
-    request = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         message = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Ollama HTTP {exc.code}: {message}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError("Ollama timeout") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Ollama unavailable: {exc.reason}") from exc
 

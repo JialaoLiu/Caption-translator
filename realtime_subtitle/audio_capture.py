@@ -87,11 +87,14 @@ class AudioCapture:
         self.samplerate = samplerate
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._system_thread: threading.Thread | None = None
         self._streams: list[sd.InputStream] = []
         self._lock = threading.Lock()
         self._mic_buffer: list[np.ndarray] = []
         self._system_buffer: list[np.ndarray] = []
         self._samples_per_chunk = int(self.samplerate * self.chunk_seconds)
+        self._last_status_report = 0.0
+        self._last_level_report = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -102,6 +105,10 @@ class AudioCapture:
 
     def stop(self) -> None:
         self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
+        if self._system_thread and self._system_thread.is_alive():
+            self._system_thread.join(timeout=3)
         for stream in list(self._streams):
             try:
                 stream.stop()
@@ -109,16 +116,15 @@ class AudioCapture:
             except Exception:
                 pass
         self._streams.clear()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3)
 
     def _run(self) -> None:
         try:
+            system_started = False
             if self.audio_mode in {"mic_only", "mic_plus_system"}:
                 self._try_open_stream("mic", self._open_mic_stream)
             if self.audio_mode in {"system_only", "mic_plus_system"}:
-                self._try_open_stream("system", self._open_system_stream)
-            if not self._streams:
+                system_started = self._try_start_system_loopback()
+            if not self._streams and not system_started:
                 raise RuntimeError("No audio input stream could be opened.")
             for stream in self._streams:
                 stream.start()
@@ -142,6 +148,24 @@ class AudioCapture:
             self._report(f"audio_error: {name} stream failed: {exc}")
             if self.audio_mode in {"mic_only", "system_only"}:
                 raise
+
+    def _try_start_system_loopback(self) -> bool:
+        try:
+            loopback = self._select_soundcard_loopback()
+            self._system_thread = threading.Thread(
+                target=self._system_loopback_worker,
+                args=(loopback,),
+                name="system-loopback",
+                daemon=True,
+            )
+            self._system_thread.start()
+            self._report(f"audio: system loopback started: {loopback.name}")
+            return True
+        except Exception as exc:
+            self._report(f"audio_error: system stream failed: {exc}")
+            if self.audio_mode == "system_only":
+                raise
+            return False
 
     def _open_mic_stream(self) -> sd.InputStream:
         samplerate = self._device_samplerate(self.device_index, input_device=True)
@@ -190,8 +214,7 @@ class AudioCapture:
         input_samplerate: int,
     ) -> None:
         if status:
-            self._report(f"audio_warning: {status}")
-            return
+            self._report_throttled(f"audio_warning: {status}")
         mono = self._to_mono_float32(indata)
         mono = self._resample(mono, input_samplerate, self.samplerate)
         with self._lock:
@@ -215,6 +238,7 @@ class AudioCapture:
                 mic = self._consume_or_silence(self._mic_buffer, self._samples_per_chunk)
                 system = self._consume_or_silence(self._system_buffer, self._samples_per_chunk)
                 chunk = self._mix(mic, system)
+        self._report_level(chunk)
         self._enqueue_latest(AudioChunk(samples=chunk, captured_at=time.perf_counter()))
 
     def _enqueue_latest(self, chunk: AudioChunk) -> None:
@@ -264,6 +288,65 @@ class AudioCapture:
         if self.on_status:
             self.on_status(message)
 
+    def _report_throttled(self, message: str, interval: float = 2.0) -> None:
+        now = time.perf_counter()
+        if now - self._last_status_report >= interval:
+            self._last_status_report = now
+            self._report(message)
+
+    def _report_level(self, chunk: np.ndarray) -> None:
+        now = time.perf_counter()
+        if now - self._last_level_report < 3.0 or chunk.size == 0:
+            return
+        self._last_level_report = now
+        rms = float(np.sqrt(np.mean(chunk * chunk)))
+        peak = float(np.max(np.abs(chunk)))
+        if peak < 0.003:
+            self._report(f"audio_warning: input level is very low, rms={rms:.4f}, peak={peak:.4f}")
+        else:
+            self._report(f"audio: input level rms={rms:.4f}, peak={peak:.4f}")
+
+    def _select_soundcard_loopback(self) -> Any:
+        if sys.platform != "win32":
+            raise RuntimeError("System audio capture requires Windows WASAPI loopback.")
+        try:
+            import soundcard as sc
+        except Exception as exc:
+            raise RuntimeError("Missing dependency: pip install soundcard") from exc
+        loopbacks = list(sc.all_microphones(include_loopback=True))
+        loopbacks = [device for device in loopbacks if getattr(device, "isloopback", False)]
+        if not loopbacks:
+            raise RuntimeError("No WASAPI loopback device found.")
+        target_name = ""
+        if self.system_device_index is not None:
+            try:
+                target_name = str(sd.query_devices(self.system_device_index).get("name", ""))
+            except Exception:
+                target_name = ""
+        if target_name:
+            normalized_target = _normalize_device_name(target_name)
+            for device in loopbacks:
+                if normalized_target and normalized_target in _normalize_device_name(device.name):
+                    return device
+        default_speaker = sc.default_speaker()
+        default_name = _normalize_device_name(default_speaker.name)
+        for device in loopbacks:
+            if default_name and default_name in _normalize_device_name(device.name):
+                return device
+        return loopbacks[0]
+
+    def _system_loopback_worker(self, loopback: Any) -> None:
+        block_frames = max(512, self.samplerate // 10)
+        try:
+            with loopback.recorder(samplerate=self.samplerate, channels=2, blocksize=block_frames) as recorder:
+                while not self._stop_event.is_set():
+                    data = recorder.record(numframes=block_frames)
+                    mono = self._to_mono_float32(data)
+                    with self._lock:
+                        self._system_buffer.append(mono)
+        except Exception as exc:
+            self._report(f"audio_error: system loopback stopped: {exc}")
+
     def _buffer_size(self, parts: list[np.ndarray]) -> int:
         return sum(part.shape[0] for part in parts)
 
@@ -281,3 +364,7 @@ class AudioCapture:
         if remainder.size:
             parts.append(remainder)
         return self._limit(chunk)
+
+
+def _normalize_device_name(name: str) -> str:
+    return "".join(ch.lower() for ch in name if ch.isalnum())

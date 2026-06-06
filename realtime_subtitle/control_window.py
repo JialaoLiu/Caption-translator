@@ -524,6 +524,8 @@ class ControlWindow(QMainWindow):
             text = f"{tr(self.lang, 'status')}: {tr(self.lang, 'error')} - {status[12:].strip()}"
         elif status.startswith("audio_warning:"):
             text = f"{tr(self.lang, 'status')}: {status}"
+        elif status.startswith("translation_warning:"):
+            text = f"{tr(self.lang, 'status')}: translation skipped - {status[20:].strip()}"
         elif status.startswith("audio:"):
             text = f"{tr(self.lang, 'status')}: {status[6:].strip()}"
         elif status.startswith("loading:"):

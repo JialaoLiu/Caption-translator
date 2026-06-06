@@ -122,7 +122,11 @@ class AsrWorker:
             source_language=self.settings.source_language,
             target_language=self.settings.target_language,
         )
-        return self.translator.translate(request)
+        try:
+            return self.translator.translate(request)
+        except Exception as exc:
+            self.on_status(f"translation_warning: {exc}")
+            return ""
 
     def _format_display(self, original: str, translated: str, latency_ms: int) -> str:
         prefix = f"[{latency_ms}ms] "
